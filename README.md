@@ -9,17 +9,21 @@ Inspired by `taskbook`, Zenith takes your productivity to the next level with SQ
 ## ✨ Features
 
 - **✅ Task Management**: Add, complete, prioritize, and delete tasks.
+- **⏱️ Time Tracking**: Track time spent on tasks with start/stop timers.
+- **🏷️ Tagging System**: Organize tasks with custom-colored tags.
+- **📅 Daily Planning**: Plan your day interactively with `zenith plan`.
 - **🔄 Recurring Tasks**: Set tasks to repeat daily, weekly, or monthly.
 - **📊 Habit Tracking**: Track your daily streaks and maintain consistency.
 - **🏗️ Project Boards**: Group tasks into projects/boards for better organization.
-- **🔍 Powerful Search**: Quickly find any task or habit.
-- **📅 Daily Summary**: Get a snapshot of your day with `zenith summary`.
+- **📜 Activity Log**: View a historical timeline of finished tasks.
+- **📊 Daily Summary**: Get a snapshot of your day with `zenith summary`.
 - **💻 Interactive TUI**: A full-screen dashboard for focused work (`zenith tui`).
 - **🗄️ SQLite Storage**: Fast, reliable, and relational data management.
 
 ## 🚀 Installation
 
 ### From Source
+
 Ensure you have [Go](https://go.dev/) installed (v1.18+).
 
 ```bash
@@ -32,13 +36,24 @@ mv zenith /usr/local/bin/ # Or any directory in your PATH
 ## 🛠️ Usage
 
 ### Tasks
+
 ```bash
-zenith task add "Finish the Go project" -r daily  # Add a recurring task
-zenith task list                                  # View all tasks
-zenith task done 1                                # Complete task #1
+# Add tasks with project, due date, and priority
+zenith task add "Finish the Go project" -p 1 -d "2026-03-20" --priority "high"
+
+# Time tracking
+zenith task start 1  # Start timer for task #1
+zenith task stop 1   # Stop timer and record duration
+
+# Tagging
+zenith task tag 1 "urgent" --color "#FF5733"
+
+zenith task list     # View all tasks (includes RUNNING status and timers)
+zenith task done 1   # Complete task #1
 ```
 
 ### Habits
+
 ```bash
 zenith habit add "Drink 2L Water"
 zenith habit log 1               # Log completion for today
@@ -46,15 +61,19 @@ zenith habit list                # View streaks and progress
 ```
 
 ### Projects
+
 ```bash
 zenith project add "Open Source Zenith"
-zenith task add "Write FAQ" --project 1
+zenith project list
 ```
 
 ### Dashboard & Utilities
+
 ```bash
-zenith tui      # Launch interactive mode
-zenith summary  # Get your daily brief
+zenith tui      # Launch interactive mode (press 's' to toggle timers)
+zenith plan     # Interactive daily planning session
+zenith log      # View historical activity timeline
+zenith summary  # Get your daily brief grouped by projects
 zenith search "go" # Search across tasks and habits
 ```
 

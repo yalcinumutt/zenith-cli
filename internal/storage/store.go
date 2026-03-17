@@ -10,6 +10,13 @@ type Store interface {
 	GetTasks() ([]models.Task, error)
 	UpdateTask(task *models.Task) error
 	DeleteTask(id int64) error
+	StartTaskTimer(taskID int64) error
+	StopTaskTimer(taskID int64) error
+
+	// Tags
+	AddTag(tag *models.Tag) error
+	AttachTagToTask(taskID, tagID int64) error
+	GetTagsForTask(taskID int64) ([]models.Tag, error)
 
 	// Habits
 	AddHabit(habit *models.Habit) error

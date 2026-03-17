@@ -43,30 +43,59 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case error:
 		m.err = msg
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
-			return m, tea.Quit
-		case "enter":
-			if len(m.tasks) > 0 {
-				task := &m.tasks[m.cursor]
-				if task.Status == "done" {
-					task.Status = "todo"
-				} else {
-					task.Status = "done"
-				}
-				_ = m.store.UpdateTask(task)
-			}
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case "down", "j":
-			if m.cursor < len(m.tasks)-1 {
-				m.cursor++
-			}
+		return m.handleKeyMsg(msg)
+	}
+	return m, nil
+}
+
+func (m model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "enter":
+		return m.toggleTaskStatus()
+	case "s":
+		return m.toggleTaskTimer()
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "down", "j":
+		if m.cursor < len(m.tasks)-1 {
+			m.cursor++
 		}
 	}
 	return m, nil
+}
+
+func (m model) toggleTaskStatus() (tea.Model, tea.Cmd) {
+	if len(m.tasks) == 0 {
+		return m, nil
+	}
+	task := &m.tasks[m.cursor]
+	if task.Status == "done" {
+		task.Status = "todo"
+	} else {
+		task.Status = "done"
+		if task.IsRunning {
+			_ = m.store.StopTaskTimer(task.ID)
+		}
+	}
+	_ = m.store.UpdateTask(task)
+	return m, m.fetchTasks
+}
+
+func (m model) toggleTaskTimer() (tea.Model, tea.Cmd) {
+	if len(m.tasks) == 0 {
+		return m, nil
+	}
+	task := m.tasks[m.cursor]
+	if task.IsRunning {
+		_ = m.store.StopTaskTimer(task.ID)
+	} else {
+		_ = m.store.StartTaskTimer(task.ID)
+	}
+	return m, m.fetchTasks
 }
 
 func (m model) View() string {
@@ -93,10 +122,36 @@ func (m model) View() string {
 			title = ui.TitleStyle.Render(title)
 		}
 
-		s += fmt.Sprintf("%s%s %s\n", cursor, status, title)
+		// Priority display
+		priority := ""
+		switch task.Priority {
+		case models.PriorityHigh:
+			priority = " " + lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA500")).Render("!")
+		case models.PriorityCritical:
+			priority = " " + lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Bold(true).Render("!!")
+		}
+
+		// Tags display
+		tagsStr := ""
+		for _, tag := range task.Tags {
+			tagStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(tag.Color))
+			if tag.Color == "" {
+				tagStyle = lipgloss.NewStyle().Foreground(ui.AccentColor)
+			}
+			tagsStr += tagStyle.Render(" #" + tag.Name)
+		}
+
+		// Timer display
+		duration := fmt.Sprintf("%dh %dm", task.TotalTime/3600, (task.TotalTime%3600)/60)
+		timer := ui.StatusTodoStyle.Render(" (" + duration + ")")
+		if task.IsRunning {
+			timer = lipgloss.NewStyle().Foreground(ui.SecondaryColor).Bold(true).Render(" (" + duration + " ⏳)")
+		}
+
+		s += fmt.Sprintf("%s%s %s%s%s%s\n", cursor, status, title, priority, timer, tagsStr)
 	}
 
-	s += "\n" + lipgloss.NewStyle().Foreground(ui.GrayColor).Render("(j/k: move, enter: toggle, q: quit)") + "\n"
+	s += "\n" + lipgloss.NewStyle().Foreground(ui.GrayColor).Render("(j/k: move, enter: toggle, s: timer, q: quit)") + "\n"
 	return ui.BorderStyle.Render(s)
 }
 
