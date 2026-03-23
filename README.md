@@ -24,7 +24,7 @@ Inspired by `taskbook`, Zenith takes your productivity to the next level with SQ
 
 ### From Source
 
-Ensure you have [Go](https://go.dev/) installed (v1.18+).
+Ensure you have [Go](https://go.dev/) installed (v1.22+).
 
 ```bash
 git clone https://github.com/yalcinumut/zenith-cli.git
@@ -33,12 +33,31 @@ go build -o zenith main.go
 mv zenith /usr/local/bin/ # Or any directory in your PATH
 ```
 
+### Pre-built Binaries
+
+You can download pre-built binaries for Windows, Linux, and macOS from the [Releases](https://github.com/yalcinumut/zenith-cli/releases) page.
+
+#### Linux (Debian/Ubuntu)
+
+```bash
+sudo dpkg -i zenith-cli_linux_amd64.deb
+```
+
+#### macOS (Homebrew)
+
+*Coming soon! In the meantime, download the Darwin binary from releases.*
+
+#### Windows
+
+Download the `.zip` from releases, extract `zenith.exe`, and add it to your PATH.
+
 ## 🛠️ Usage
 
 ### Tasks
 
 ```bash
 # Add tasks with project, due date, and priority
+
 zenith task add "Finish the Go project" -p 1 -d "2026-03-20" --priority "high"
 
 # Time tracking
@@ -46,10 +65,15 @@ zenith task start 1  # Start timer for task #1
 zenith task stop 1   # Stop timer and record duration
 
 # Tagging
+
 zenith task tag 1 "urgent" --color "#FF5733"
 
 zenith task list     # View all tasks (includes RUNNING status and timers)
 zenith task done 1   # Complete task #1
+
+# Move tasks between projects
+# If no projects exist, Zenith creates a default "Anytime" project.
+zenith task move 1 2 # Move task #1 to project #2
 ```
 
 ### Habits
@@ -75,6 +99,7 @@ zenith plan     # Interactive daily planning session
 zenith log      # View historical activity timeline
 zenith summary  # Get your daily brief grouped by projects
 zenith search "go" # Search across tasks and habits
+zenith update    # Check for and install the latest version
 ```
 
 ## 🎨 Technology Stack

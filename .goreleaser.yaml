@@ -1,0 +1,52 @@
+# .goreleaser.yaml
+version: 2
+project_name: zenith-cli
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    main: ./main.go
+    binary: zenith
+
+archives:
+  - format: tar.gz
+    # this name template makes the search algorithm of go-github-selfupdate easier to find the binary
+    name_template: >-
+      {{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+nfpms:
+  - maintainer: yalcinumut <yalcinumut@example.com>
+    description: Zenith is a CLI Productivity Tool
+    homepage: https://github.com/yalcinumut/zenith-cli
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin

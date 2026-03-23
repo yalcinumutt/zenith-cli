@@ -52,7 +52,28 @@ func NewSQLiteStoreAtPath(dbPath string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("could not run migrations: %w", err)
 	}
 
+	if err := ensureDefaultProject(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("could not ensure default project: %w", err)
+	}
+
 	return &SQLiteStore{db: db}, nil
+}
+
+func ensureDefaultProject(db *sql.DB) error {
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM projects").Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		_, err := db.Exec("INSERT INTO projects (name, description) VALUES (?, ?)", "Anytime", "Default project for tasks")
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *SQLiteStore) AddTask(task *models.Task) error {

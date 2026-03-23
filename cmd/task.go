@@ -231,6 +231,50 @@ var taskDeleteCmd = &cobra.Command{
 	},
 }
 
+var taskMoveCmd = &cobra.Command{
+	Use:   "move [taskID] [projectID]",
+	Short: "Move a task to another project",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		taskID, err := strconv.ParseInt(args[0], 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid task ID: %w", err)
+		}
+
+		projectID, err := strconv.ParseInt(args[1], 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid project ID: %w", err)
+		}
+
+		// Get all tasks to find the target task
+		tasks, err := store.GetTasks()
+		if err != nil {
+			return err
+		}
+
+		var target *models.Task
+		for _, t := range tasks {
+			if t.ID == taskID {
+				target = &t
+				break
+			}
+		}
+
+		if target == nil {
+			return fmt.Errorf("task with ID %d not found", taskID)
+		}
+
+		// Update project ID
+		target.ProjectID = &projectID
+		if err := store.UpdateTask(target); err != nil {
+			return err
+		}
+
+		fmt.Printf("Task %d moved to project %d\n", taskID, projectID)
+		return nil
+	},
+}
+
 func init() {
 	taskAddCmd.Flags().StringVarP(&recurring, "recurring", "r", "none", "Recurrence pattern (daily, weekly, monthly)")
 	taskAddCmd.Flags().Int64VarP(&projectID, "project", "p", 0, "Project ID")
@@ -246,4 +290,5 @@ func init() {
 	taskCmd.AddCommand(taskStartCmd)
 	taskCmd.AddCommand(taskStopCmd)
 	taskCmd.AddCommand(taskTagCmd)
+	taskCmd.AddCommand(taskMoveCmd)
 }

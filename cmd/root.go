@@ -9,12 +9,14 @@ import (
 )
 
 var (
-	store storage.Store
+	store   storage.Store
+	Version = "v0.1.0"
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "zenith",
-	Short: "Zenith is a CLI Productivity Tool",
+	Use:     "zenith",
+	Version: Version,
+	Short:   "Zenith is a CLI Productivity Tool",
 	Long: `Zenith is a powerful CLI for habit tracking, task management, and project management.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		s, err := storage.NewSQLiteStore()
