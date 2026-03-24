@@ -8,10 +8,10 @@ before:
 
 builds:
   - env:
-      - CGO_ENABLED=1
+      - CGO_ENABLED=0
     goos:
       - linux
-      - windows
+      # - windows
       - darwin
     goarch:
       - amd64
@@ -20,19 +20,19 @@ builds:
     binary: zenith
 
 archives:
-  - format: tar.gz
+  - formats: tar.gz
     # this name template makes the search algorithm of go-github-selfupdate easier to find the binary
     name_template: >-
       {{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}
     format_overrides:
       - goos: windows
-        format: zip
+        formats: zip
 
 checksum:
   name_template: 'checksums.txt'
 
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc

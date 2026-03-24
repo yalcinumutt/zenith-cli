@@ -21,3 +21,6 @@ zenith-cli
 
 # Dependencies
 vendor/
+
+# Distribution
+dist/
