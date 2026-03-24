@@ -42,7 +42,7 @@ changelog:
       - '^test:'
 
 nfpms:
-  - maintainer: yalcinumut <yalcinumut@example.com>
+  - maintainer: yalcinumut <umut@summitcode.net>
     description: Zenith is a CLI Productivity Tool
     homepage: https://github.com/yalcinumut/zenith-cli
     license: MIT
