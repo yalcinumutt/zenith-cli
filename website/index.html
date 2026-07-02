@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zenith CLI - Ultimate Terminal Productivity Suite</title>
+    <meta name="description" content="Zenith CLI is a futuristic, highly customizable command line productivity tool featuring task management, habit tracking, TUI dashboards, local Ollama / LM Studio AI integration, and scheduled timers.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="navbar">
+        <div class="logo">
+            <span class="logo-icon">⚡</span>
+            <span class="logo-text">Zenith CLI</span>
+        </div>
+        <nav class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#demo">Interactive Demo</a>
+            <a href="#tui">TUI Dashboard</a>
+            <a href="#installation" class="btn-primary-sm">Get Started</a>
+        </nav>
+    </header>
+
+    <main>
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="hero-content">
+                <div class="badge">v0.1.0 Release</div>
+                <h1>Take control of your focus, straight from the <span>terminal</span>.</h1>
+                <p class="hero-subtitle">A futuristic terminal productivity suite combining habit tracking, time logs, interactive TUI, local Ollama/LM Studio AI feedback, and scheduled alerts in a single monorepo Go app.</p>
+                
+                <div class="hero-actions">
+                    <a href="#demo" class="btn-primary" id="btn-see-demo">See Live Demo</a>
+                    <a href="#installation" class="btn-secondary" id="btn-view-install">Install Guide</a>
+                </div>
+            </div>
+            
+            <div class="hero-terminal">
+                <div class="terminal-header">
+                    <span class="terminal-dot red"></span>
+                    <span class="terminal-dot yellow"></span>
+                    <span class="terminal-dot green"></span>
+                    <span class="terminal-title">zenith --version</span>
+                </div>
+                <div class="terminal-body font-mono">
+                    <span class="term-prompt">$</span> <span class="typing-text">zenith --help</span>
+                    <pre class="term-output">
+Zenith is a powerful CLI for habit tracking, task management, and project management.
+
+Usage:
+  zenith [command]
+
+Available Commands:
+  ai          AI powered productivity helper (Ollama / LM Studio)
+  habit       Track and log daily habits
+  project     Manage development projects
+  summary     Show daily summary list
+  task        Manage tasks and time logs
+  timer       Manage and schedule task timers and reminders
+  tui         Open the interactive TUI dashboard
+
+Flags:
+  -h, --help      help for zenith
+  -v, --version   version for zenith</pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Grid -->
+        <section id="features" class="features-section">
+            <h2 class="section-title">Everything you need to stay in the zone</h2>
+            <p class="section-subtitle">No cloud, no trackers. Completely local, fast, and optimized for developers.</p>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📝</div>
+                    <h3>Task Management</h3>
+                    <p>Add, prioritize, and structure tasks by projects. Complete tasks, apply colored tags, and track time spent on each activity.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔄</div>
+                    <h3>Habit Building</h3>
+                    <p>Build consistency by tracking daily, weekly, or monthly habits. Log completed occurrences directly from the terminal.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <h3>Local AI Integration</h3>
+                    <p>Connects to local LLMs via Ollama or LM Studio. Analyze tasks and generate daily productivity suggestions or summaries locally.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔔</div>
+                    <h3>Scheduled Timers</h3>
+                    <p>Set timed reminders for task sessions (Pomodoros, breaks, meetings). Receive native macOS desktop notifications and command line alerts.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Interactive TUI</h3>
+                    <p>A full terminal UI built on Go Bubble Tea. Visualize tasks, view the date, track running timers, and view progress bars dynamically.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📜</div>
+                    <h3>Task History Log</h3>
+                    <p>Maintain a chronological audit history of all status changes, edit operations, and active timer sessions for every task.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Interactive Terminal Simulator -->
+        <section id="demo" class="demo-section">
+            <h2 class="section-title">Try Zenith interactively</h2>
+            <p class="section-subtitle">Click on a command below to see how Zenith responds in real-time.</p>
+            
+            <div class="demo-container">
+                <div class="demo-buttons">
+                    <button class="btn-demo active" data-cmd="add" id="demo-cmd-add">Add Critical Task</button>
+                    <button class="btn-demo" data-cmd="summary" id="demo-cmd-summary">View Summary</button>
+                    <button class="btn-demo" data-cmd="timer" id="demo-cmd-timer">Schedule Timer</button>
+                    <button class="btn-demo" data-cmd="ai" id="demo-cmd-ai">Ask AI Suggestion</button>
+                    <button class="btn-demo" data-cmd="tui" id="demo-cmd-tui">Launch TUI</button>
+                </div>
+                
+                <div class="interactive-terminal">
+                    <div class="terminal-header">
+                        <span class="terminal-dot red"></span>
+                        <span class="terminal-dot yellow"></span>
+                        <span class="terminal-dot green"></span>
+                        <span class="terminal-title">Zenith Interactive Terminal</span>
+                    </div>
+                    <div class="terminal-body font-mono" id="demo-terminal-body">
+                        <span class="term-prompt">$</span> <span class="typing-demo"></span>
+                        <pre class="term-output-demo"></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TUI Showcase -->
+        <section id="tui" class="tui-section">
+            <div class="tui-showcase-container">
+                <div class="tui-showcase-text">
+                    <h2>Beautiful Terminal Dashboards</h2>
+                    <p>Launch the interactive terminal dashboard by running <code>zenith tui</code>. Fully dynamic layout built using Bubble Tea and styled with Lipgloss, providing progress bars, date indicators, and ticking time tracking sessions in real time.</p>
+                    <ul class="tui-features">
+                        <li><strong>Live Clock:</strong> Tracks the current calendar date inside your shell.</li>
+                        <li><strong>Progress Visualizer:</strong> Renders filled and empty block progress bars of your daily tasks.</li>
+                        <li><strong>Real-time Timers:</strong> Watch your logged session hours, minutes, and seconds increment in the UI.</li>
+                        <li><strong>Fast Navigation:</strong> Use standard Vim keys (<code>j</code> / <code>k</code>) or arrow keys to move.</li>
+                    </ul>
+                </div>
+                <div class="tui-mockup">
+                    <div class="tui-window">
+                        <div class="tui-window-header">
+                            <span class="tui-window-dot red"></span>
+                            <span class="tui-window-dot yellow"></span>
+                            <span class="tui-window-dot green"></span>
+                            <span class="tui-window-title">zenith tui</span>
+                        </div>
+                        <div class="tui-window-body font-mono">
+                            <div class="tui-header"> Zenith TUI Dashboard </div>
+                            <div class="tui-date">📅 Thursday, 02 Jul 2026</div>
+                            <br>
+                            <div class="tui-progress">Progress: 2/3 completed [<span class="tui-green">██████████░░░░░</span>] 66%</div>
+                            <br>
+                            <div class="tui-task-item">&nbsp;&nbsp; [ ] Add Ollama &amp; LM Studio integration <span class="tui-orange">!</span> <span class="tui-green">(0h 25m 12s ⏳)</span></div>
+                            <div class="tui-task-item">&nbsp;&nbsp; [x] Schedule reminders support <span class="tui-dim">(1h 45m 0s)</span> <span class="tui-magenta">#feature</span></div>
+                            <div class="tui-task-item">&nbsp;&nbsp; [x] History logs for task events <span class="tui-dim">(0h 50m 0s)</span> <span class="tui-magenta">#database</span></div>
+                            <br>
+                            <div class="tui-footer">(j/k: move, enter: toggle, s: timer, q: quit)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Installation Section -->
+        <section id="installation" class="install-section">
+            <h2 class="section-title">Install Zenith CLI</h2>
+            <p class="section-subtitle">Get started in seconds on macOS, Linux, or Windows.</p>
+            
+            <div class="install-options">
+                <div class="install-box">
+                    <h4>From Source (Go)</h4>
+                    <code>go install github.com/yalcinumut/zenith-cli@latest</code>
+                </div>
+                <div class="install-box">
+                    <h4>Homebrew (macOS)</h4>
+                    <code>brew install yalcinumut/tap/zenith</code>
+                </div>
+            </div>
+            
+            <div class="ai-config-info">
+                <h3>Ollama &amp; LM Studio AI Setup</h3>
+                <p>Ensure you have <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a> or <a href="https://lmstudio.ai" target="_blank" rel="noopener">LM Studio</a> running locally. Then set your preferred provider:</p>
+                <div class="config-snippet font-mono">
+                    <span class="comment"># For Ollama (default)</span><br>
+                    export ZENITH_AI_PROVIDER="ollama"<br>
+                    export ZENITH_AI_MODEL="llama3"<br><br>
+                    <span class="comment"># For LM Studio</span><br>
+                    export ZENITH_AI_PROVIDER="lmstudio"<br>
+                    export ZENITH_AI_MODEL="meta-llama-3-8b-instruct"
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Zenith CLI. Built for developers who love the terminal.</p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>

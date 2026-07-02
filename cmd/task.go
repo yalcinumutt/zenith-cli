@@ -275,6 +275,37 @@ var taskMoveCmd = &cobra.Command{
 	},
 }
 
+var taskHistoryCmd = &cobra.Command{
+	Use:   "history [taskID]",
+	Short: "View event history and logged sessions for a task",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := strconv.ParseInt(args[0], 10, 64)
+		if err != nil {
+			return fmt.Errorf(errMsgInvalidID, err)
+		}
+
+		history, err := store.GetTaskHistory(id)
+		if err != nil {
+			return err
+		}
+
+		if len(history) == 0 {
+			fmt.Println("No history logs found for this task.")
+			return nil
+		}
+
+		fmt.Printf("\nEvent History for Task ID %d:\n", id)
+		fmt.Println("--------------------------------------------------------------------------------")
+		for _, h := range history {
+			timeStr := h.Timestamp.Format("2006-01-02 15:04:05")
+			fmt.Printf("[%s] %-15s - %s\n", timeStr, strings.ToUpper(h.Action), h.Details)
+		}
+		fmt.Println("--------------------------------------------------------------------------------")
+		return nil
+	},
+}
+
 func init() {
 	taskAddCmd.Flags().StringVarP(&recurring, "recurring", "r", "none", "Recurrence pattern (daily, weekly, monthly)")
 	taskAddCmd.Flags().Int64VarP(&projectID, "project", "p", 0, "Project ID")
@@ -291,4 +322,5 @@ func init() {
 	taskCmd.AddCommand(taskStopCmd)
 	taskCmd.AddCommand(taskTagCmd)
 	taskCmd.AddCommand(taskMoveCmd)
+	taskCmd.AddCommand(taskHistoryCmd)
 }

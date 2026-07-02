@@ -46,6 +46,35 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
+	// 6. Create scheduled_timers table if it doesn't exist
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS scheduled_timers (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		task_id INTEGER,
+		title TEXT NOT NULL,
+		trigger_time DATETIME NOT NULL,
+		status TEXT DEFAULT 'pending',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+	)`)
+	if err != nil {
+		return fmt.Errorf("failed to create scheduled_timers table: %w", err)
+	}
+	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_scheduled_timers_status ON scheduled_timers(status)")
+
+	// 7. Create task_history table if it doesn't exist
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS task_history (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		task_id INTEGER NOT NULL,
+		action TEXT NOT NULL,
+		details TEXT NOT NULL,
+		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+	)`)
+	if err != nil {
+		return fmt.Errorf("failed to create task_history table: %w", err)
+	}
+	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_task_history_task ON task_history(task_id)")
+
 	return nil
 }
 

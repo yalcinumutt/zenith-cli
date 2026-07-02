@@ -30,4 +30,13 @@ type Store interface {
 	// Search
 	SearchTasks(query string) ([]models.Task, error)
 	SearchHabits(query string) ([]models.Habit, error)
+
+	// Scheduled Timers
+	AddScheduledTimer(timer *models.ScheduledTimer) error
+	GetPendingScheduledTimers() ([]models.ScheduledTimer, error)
+	MarkScheduledTimerTriggered(id int64) error
+
+	// Task History
+	AddTaskHistory(history *models.TaskHistory) error
+	GetTaskHistory(taskID int64) ([]models.TaskHistory, error)
 }

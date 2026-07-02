@@ -89,6 +89,13 @@ func (s *SQLiteStore) AddTask(task *models.Task) error {
 	}
 
 	task.ID = id
+
+	_ = s.AddTaskHistory(&models.TaskHistory{
+		TaskID:  task.ID,
+		Action:  "created",
+		Details: fmt.Sprintf("Task created: '%s'", task.Title),
+	})
+
 	return nil
 }
 
@@ -126,10 +133,27 @@ func (s *SQLiteStore) GetTasks() ([]models.Task, error) {
 }
 
 func (s *SQLiteStore) UpdateTask(task *models.Task) error {
+	var oldStatus string
+	_ = s.db.QueryRow("SELECT status FROM tasks WHERE id = ?", task.ID).Scan(&oldStatus)
+
 	query := `UPDATE tasks SET project_id = ?, title = ?, description = ?, status = ?, priority = ?, due_date = ?, planned_date = ?, recurring = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
 	_, err := s.db.Exec(query, task.ProjectID, task.Title, task.Description, task.Status, task.Priority, task.DueDate, task.PlannedDate, task.Recurring, task.ID)
 	if err != nil {
 		return fmt.Errorf("could not update task: %w", err)
+	}
+
+	if oldStatus != task.Status {
+		_ = s.AddTaskHistory(&models.TaskHistory{
+			TaskID:  task.ID,
+			Action:  "status_changed",
+			Details: fmt.Sprintf("Status changed from '%s' to '%s'", oldStatus, task.Status),
+		})
+	} else {
+		_ = s.AddTaskHistory(&models.TaskHistory{
+			TaskID:  task.ID,
+			Action:  "edited",
+			Details: fmt.Sprintf("Task edited: '%s'", task.Title),
+		})
 	}
 	return nil
 }
@@ -267,12 +291,42 @@ func (s *SQLiteStore) StartTaskTimer(taskID int64) error {
 		return err
 	}
 	_, err := s.db.Exec(`INSERT INTO task_time_logs (task_id, start_time) VALUES (?, CURRENT_TIMESTAMP)`, taskID)
-	return err
+	if err != nil {
+		return err
+	}
+
+	_ = s.AddTaskHistory(&models.TaskHistory{
+		TaskID:  taskID,
+		Action:  "started_timer",
+		Details: "Started tracking time",
+	})
+	return nil
 }
 
 func (s *SQLiteStore) StopTaskTimer(taskID int64) error {
-	_, err := s.db.Exec(`UPDATE task_time_logs SET end_time = CURRENT_TIMESTAMP WHERE task_id = ? AND end_time IS NULL`, taskID)
-	return err
+	var logID int64
+	err := s.db.QueryRow(`SELECT id FROM task_time_logs WHERE task_id = ? AND end_time IS NULL`, taskID).Scan(&logID)
+	if err != nil {
+		return nil // No active timer to stop
+	}
+
+	_, err = s.db.Exec(`UPDATE task_time_logs SET end_time = CURRENT_TIMESTAMP WHERE id = ?`, logID)
+	if err != nil {
+		return err
+	}
+
+	var secs int64
+	_ = s.db.QueryRow(`
+		SELECT strftime('%s', end_time) - strftime('%s', start_time) 
+		FROM task_time_logs 
+		WHERE id = ?`, logID).Scan(&secs)
+
+	_ = s.AddTaskHistory(&models.TaskHistory{
+		TaskID:  taskID,
+		Action:  "stopped_timer",
+		Details: fmt.Sprintf("Stopped tracking time. Duration: %dh %dm %ds", secs/3600, (secs%3600)/60, secs%60),
+	})
+	return nil
 }
 
 func (s *SQLiteStore) AddTag(tag *models.Tag) error {
@@ -315,6 +369,77 @@ func (s *SQLiteStore) GetTagsForTask(taskID int64) ([]models.Tag, error) {
 		tags = append(tags, t)
 	}
 	return tags, nil
+}
+
+func (s *SQLiteStore) AddScheduledTimer(timer *models.ScheduledTimer) error {
+	query := `INSERT INTO scheduled_timers (task_id, title, trigger_time, status) VALUES (?, ?, ?, ?)`
+	res, err := s.db.Exec(query, timer.TaskID, timer.Title, timer.TriggerTime, "pending")
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	timer.ID = id
+	return nil
+}
+
+func (s *SQLiteStore) GetPendingScheduledTimers() ([]models.ScheduledTimer, error) {
+	query := `SELECT id, task_id, title, trigger_time, status, created_at FROM scheduled_timers WHERE status = 'pending'`
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var timers []models.ScheduledTimer
+	for rows.Next() {
+		var t models.ScheduledTimer
+		err := rows.Scan(&t.ID, &t.TaskID, &t.Title, &t.TriggerTime, &t.Status, &t.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		timers = append(timers, t)
+	}
+	return timers, nil
+}
+
+func (s *SQLiteStore) MarkScheduledTimerTriggered(id int64) error {
+	_, err := s.db.Exec(`UPDATE scheduled_timers SET status = 'triggered' WHERE id = ?`, id)
+	return err
+}
+
+func (s *SQLiteStore) AddTaskHistory(history *models.TaskHistory) error {
+	query := `INSERT INTO task_history (task_id, action, details) VALUES (?, ?, ?)`
+	res, err := s.db.Exec(query, history.TaskID, history.Action, history.Details)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	history.ID = id
+	return nil
+}
+
+func (s *SQLiteStore) GetTaskHistory(taskID int64) ([]models.TaskHistory, error) {
+	query := `SELECT id, task_id, action, details, timestamp FROM task_history WHERE task_id = ? ORDER BY id DESC`
+	rows, err := s.db.Query(query, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var history []models.TaskHistory
+	for rows.Next() {
+		var h models.TaskHistory
+		err := rows.Scan(&h.ID, &h.TaskID, &h.Action, &h.Details, &h.Timestamp)
+		if err != nil {
+			return nil, err
+		}
+		history = append(history, h)
+	}
+	return history, nil
 }
 
 func (s *SQLiteStore) Close() error {

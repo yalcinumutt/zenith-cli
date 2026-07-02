@@ -74,3 +74,28 @@ CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_planned_date ON tasks(planned_date);
 CREATE INDEX IF NOT EXISTS idx_habit_logs_habit ON habit_logs(habit_id);
 CREATE INDEX IF NOT EXISTS idx_task_time_logs_task ON task_time_logs(task_id);
+
+-- Scheduled Timers Table
+CREATE TABLE IF NOT EXISTS scheduled_timers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER,
+    title TEXT NOT NULL,
+    trigger_time DATETIME NOT NULL,
+    status TEXT DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
+-- Task History Table
+CREATE TABLE IF NOT EXISTS task_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    details TEXT NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_scheduled_timers_status ON scheduled_timers(status);
+CREATE INDEX IF NOT EXISTS idx_task_history_task ON task_history(task_id);
+

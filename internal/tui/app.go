@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -24,8 +25,16 @@ func NewModel(s storage.Store) model {
 	}
 }
 
+type tickMsg time.Time
+
+func tickCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
+}
+
 func (m model) Init() tea.Cmd {
-	return m.fetchTasks
+	return tea.Batch(m.fetchTasks, tickCmd())
 }
 
 func (m model) fetchTasks() tea.Msg {
@@ -42,6 +51,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tasks = msg
 	case error:
 		m.err = msg
+	case tickMsg:
+		for i, t := range m.tasks {
+			if t.IsRunning {
+				m.tasks[i].TotalTime++
+			}
+		}
+		return m, tickCmd()
 	case tea.KeyMsg:
 		return m.handleKeyMsg(msg)
 	}
@@ -103,8 +119,36 @@ func (m model) View() string {
 		return fmt.Sprintf("Error: %v", m.err)
 	}
 
+	dateStr := time.Now().Format("Monday, 02 Jan 2006")
 	header := ui.HeaderStyle.Render(" Zenith TUI Dashboard ")
-	s := header + "\n\n"
+	s := header + "  📅 " + lipgloss.NewStyle().Foreground(ui.AccentColor).Bold(true).Render(dateStr) + "\n\n"
+
+	// Progress bar calculation
+	var completed int
+	for _, t := range m.tasks {
+		if t.Status == "done" {
+			completed++
+		}
+	}
+	var progressBar string
+	if len(m.tasks) > 0 {
+		pct := (completed * 100) / len(m.tasks)
+		width := 15
+		filled := (completed * width) / len(m.tasks)
+		bar := ""
+		for j := 0; j < width; j++ {
+			if j < filled {
+				bar += "█"
+			} else {
+				bar += "░"
+			}
+		}
+		progressBar = fmt.Sprintf("Progress: %d/%d completed [%s] %d%%", 
+			completed, len(m.tasks), lipgloss.NewStyle().Foreground(ui.SecondaryColor).Render(bar), pct)
+	} else {
+		progressBar = "Progress: No tasks tracked yet."
+	}
+	s += lipgloss.NewStyle().Foreground(ui.GrayColor).Render(progressBar) + "\n\n"
 
 	for i, task := range m.tasks {
 		cursor := "  "
@@ -142,7 +186,7 @@ func (m model) View() string {
 		}
 
 		// Timer display
-		duration := fmt.Sprintf("%dh %dm", task.TotalTime/3600, (task.TotalTime%3600)/60)
+		duration := fmt.Sprintf("%dh %dm %ds", task.TotalTime/3600, (task.TotalTime%3600)/60, task.TotalTime%60)
 		timer := ui.StatusTodoStyle.Render(" (" + duration + ")")
 		if task.IsRunning {
 			timer = lipgloss.NewStyle().Foreground(ui.SecondaryColor).Bold(true).Render(" (" + duration + " ⏳)")
