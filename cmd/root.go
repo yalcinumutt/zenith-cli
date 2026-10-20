@@ -12,7 +12,7 @@ import (
 
 var (
 	store   storage.Store
-	Version = "v0.1.0"
+	Version = "v0.1.2"
 )
 
 var rootCmd = &cobra.Command{
