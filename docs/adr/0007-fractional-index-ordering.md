@@ -1,0 +1,3 @@
+# Manual ordering uses a fractional index, not integer positions
+
+v1 adds manual drag-to-reorder within a list/Project, stored as a sortable fractional key per row (ties broken by UUID) rather than an integer `position` column. An integer position requires renumbering every neighbour on a move; under the per-device op-log sync model (see the folder-sync research, issue #4), two devices renumbering concurrently corrupt the sequence for both. A fractional index makes a reorder a single-row write, so it merges under per-field last-write-wins like any other field, with no special-case merge logic.
