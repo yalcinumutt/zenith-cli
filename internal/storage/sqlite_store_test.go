@@ -1,8 +1,10 @@
 package storage
 
 import (
-	"database/sql"
+	"fmt"
 	"os"
+	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -74,7 +76,7 @@ func TestMigrate(t *testing.T) {
 	tempFile := "test_migrate.db"
 	defer os.Remove(tempFile)
 
-	db, err := sql.Open("sqlite3", tempFile)
+	db, err := openDB(tempFile)
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
@@ -213,4 +215,73 @@ func TestSQLiteStore_TaskHistory(t *testing.T) {
 	}
 }
 
+func TestSQLiteStore_ConcurrentWritersShareOneFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "shared.db")
 
+	// Two independent stores stand in for two processes (CLI and desktop app).
+	a, err := NewSQLiteStoreAtPath(path)
+	if err != nil {
+		t.Fatalf("open store a: %v", err)
+	}
+	defer a.Close()
+	b, err := NewSQLiteStoreAtPath(path)
+	if err != nil {
+		t.Fatalf("open store b: %v", err)
+	}
+	defer b.Close()
+
+	const perWriter = 50
+	errs := make(chan error, 2*perWriter)
+	var wg sync.WaitGroup
+	for _, s := range []*SQLiteStore{a, b} {
+		wg.Add(1)
+		go func(s *SQLiteStore) {
+			defer wg.Done()
+			for i := 0; i < perWriter; i++ {
+				if err := s.AddTask(&models.Task{Title: fmt.Sprintf("task %d", i)}); err != nil {
+					errs <- err
+				}
+			}
+		}(s)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Errorf("concurrent write failed: %v", err)
+	}
+
+	tasks, err := a.GetTasks()
+	if err != nil {
+		t.Fatalf("list tasks: %v", err)
+	}
+	if len(tasks) != 2*perWriter {
+		t.Errorf("expected %d tasks, got %d", 2*perWriter, len(tasks))
+	}
+}
+
+func TestSQLiteStore_PathsWithURISyntax(t *testing.T) {
+	for _, dir := range []string{"with space", "hash#dir", "q?dir", "pct%20dir"} {
+		p := filepath.Join(t.TempDir(), dir, "data.db")
+		s, err := NewSQLiteStoreAtPath(p)
+		if err != nil {
+			t.Errorf("%q: %v", dir, err)
+			continue
+		}
+		if err := s.AddTask(&models.Task{Title: "x"}); err != nil {
+			t.Errorf("%q: %v", dir, err)
+		}
+		s.Close()
+		s2, err := NewSQLiteStoreAtPath(p)
+		if err != nil {
+			t.Errorf("%q reopen: %v", dir, err)
+			continue
+		}
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%q: db not at path: %v", dir, err)
+		}
+		if ts, _ := s2.GetTasks(); len(ts) != 1 {
+			t.Errorf("%q: file not at expected path / %d tasks", dir, len(ts))
+		}
+		s2.Close()
+	}
+}

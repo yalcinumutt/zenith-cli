@@ -4,11 +4,12 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/yalcinumut/zenith-cli/internal/models"
+	_ "modernc.org/sqlite"
 )
 
 //go:embed schema.sql
@@ -28,6 +29,32 @@ func NewSQLiteStore() (*SQLiteStore, error) {
 	return NewSQLiteStoreAtPath(dbPath)
 }
 
+// openDB is the only place the database is opened. Pragmas ride on the DSN so
+// every pooled connection gets them (ADR 0008).
+func openDB(dbPath string) (*sql.DB, error) {
+	q := url.Values{}
+	q.Add("_pragma", "journal_mode(WAL)")
+	q.Add("_pragma", "busy_timeout(5000)")
+	q.Add("_pragma", "synchronous(NORMAL)")
+	// The path must be URI-escaped: SQLite would otherwise read '?', '#' or '%'
+	// in a home directory as DSN syntax and open the wrong file.
+	p := filepath.ToSlash(dbPath)
+	if filepath.VolumeName(dbPath) != "" {
+		p = "/" + p // C:/x.db -> /C:/x.db
+	}
+	dsn := "file:" + (&url.URL{Path: p}).EscapedPath() + "?" + q.Encode()
+
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("could not open database: %w", err)
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("could not open database: %w", err)
+	}
+	return db, nil
+}
+
 func NewSQLiteStoreAtPath(dbPath string) (*SQLiteStore, error) {
 	dbDir := filepath.Dir(dbPath)
 
@@ -37,9 +64,9 @@ func NewSQLiteStoreAtPath(dbPath string) (*SQLiteStore, error) {
 		}
 	}
 
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := openDB(dbPath)
 	if err != nil {
-		return nil, fmt.Errorf("could not open database: %w", err)
+		return nil, err
 	}
 
 	if _, err := db.Exec(schemaSQL); err != nil {
