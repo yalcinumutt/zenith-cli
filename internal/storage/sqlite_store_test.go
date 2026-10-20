@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -260,7 +261,11 @@ func TestSQLiteStore_ConcurrentWritersShareOneFile(t *testing.T) {
 }
 
 func TestSQLiteStore_PathsWithURISyntax(t *testing.T) {
-	for _, dir := range []string{"with space", "hash#dir", "q?dir", "pct%20dir"} {
+	dirs := []string{"with space", "hash#dir", "pct%20dir"}
+	if runtime.GOOS != "windows" { // '?' is not a legal Windows filename character
+		dirs = append(dirs, "q?dir")
+	}
+	for _, dir := range dirs {
 		p := filepath.Join(t.TempDir(), dir, "data.db")
 		s, err := NewSQLiteStoreAtPath(p)
 		if err != nil {
