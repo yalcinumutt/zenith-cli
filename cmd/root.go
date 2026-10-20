@@ -3,12 +3,11 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
-	"github.com/yalcinumut/zenith-cli/internal/storage"
+	"github.com/yalcinumutt/zenith-cli/internal/storage"
 )
 
 var (
@@ -51,9 +50,7 @@ func checkExpiredTimersPassive() {
 		if t.TriggerTime.Before(now) {
 			triggered = append(triggered, t.Title)
 			_ = store.MarkScheduledTimerTriggered(t.ID)
-			// Trigger macOS notification
-			script := fmt.Sprintf(`display notification "%s" with title "Zenith Reminder" sound name "Glass"`, t.Title)
-			_ = exec.Command("osascript", "-e", script).Run()
+			sendDesktopNotification(t.Title)
 		}
 	}
 

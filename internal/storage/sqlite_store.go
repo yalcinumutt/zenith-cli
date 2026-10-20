@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/yalcinumut/zenith-cli/internal/models"
+	"github.com/yalcinumutt/zenith-cli/internal/models"
 	_ "modernc.org/sqlite"
 )
 

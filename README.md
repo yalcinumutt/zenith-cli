@@ -27,7 +27,7 @@ Inspired by `taskbook`, Zenith takes your productivity to the next level with SQ
 Ensure you have [Go](https://go.dev/) installed (v1.22+).
 
 ```bash
-git clone https://github.com/yalcinumut/zenith-cli.git
+git clone https://github.com/yalcinumutt/zenith-cli.git
 cd zenith-cli
 go build -o zenith main.go
 mv zenith /usr/local/bin/ # Or any directory in your PATH
@@ -35,7 +35,7 @@ mv zenith /usr/local/bin/ # Or any directory in your PATH
 
 ### Pre-built Binaries
 
-You can download pre-built binaries for Windows, Linux, and macOS from the [Releases](https://github.com/yalcinumut/zenith-cli/releases) page.
+You can download pre-built binaries for Windows, Linux, and macOS from the [Releases](https://github.com/yalcinumutt/zenith-cli/releases) page.
 
 #### Linux (Debian/Ubuntu)
 

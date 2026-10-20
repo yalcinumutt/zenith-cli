@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"github.com/yalcinumut/zenith-cli/internal/models"
+	"github.com/yalcinumutt/zenith-cli/internal/models"
 )
 
 type Store interface {

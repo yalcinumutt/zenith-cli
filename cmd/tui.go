@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/yalcinumut/zenith-cli/internal/tui"
+	"github.com/yalcinumutt/zenith-cli/internal/tui"
 )
 
 var tuiCmd = &cobra.Command{

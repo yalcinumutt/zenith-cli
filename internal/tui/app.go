@@ -6,9 +6,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/yalcinumut/zenith-cli/internal/models"
-	"github.com/yalcinumut/zenith-cli/internal/storage"
-	"github.com/yalcinumut/zenith-cli/internal/ui"
+	"github.com/yalcinumutt/zenith-cli/internal/models"
+	"github.com/yalcinumutt/zenith-cli/internal/storage"
+	"github.com/yalcinumutt/zenith-cli/internal/ui"
 )
 
 type model struct {

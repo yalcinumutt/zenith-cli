@@ -1,4 +1,4 @@
-module github.com/yalcinumut/zenith-cli
+module github.com/yalcinumutt/zenith-cli
 
 go 1.26.0
 

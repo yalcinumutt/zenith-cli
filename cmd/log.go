@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/yalcinumut/zenith-cli/internal/ui"
+	"github.com/yalcinumutt/zenith-cli/internal/ui"
 )
 
 var logCmd = &cobra.Command{

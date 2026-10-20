@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/yalcinumut/zenith-cli/internal/models"
+	"github.com/yalcinumutt/zenith-cli/internal/models"
 )
 
 var habitCmd = &cobra.Command{

@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 go build -o zenith main.go          # build the binary (gitignored)
 go run main.go <command>            # run without building
-go test ./...                       # all tests (only internal/storage has tests)
+go test ./...                       # all tests (internal/storage and cmd have tests)
 go test ./internal/storage -run TestSQLiteStore_TasksWithTagsAndTimers   # single test
 ```
 
@@ -15,7 +15,7 @@ There is no Makefile or linter config. Releases are cut by pushing a `v*` tag, w
 
 ## Architecture
 
-Go CLI (module `github.com/yalcinumut/zenith-cli`) for tasks, habits, projects and time tracking. Cobra commands + Bubble Tea TUI + SQLite.
+Go CLI (module `github.com/yalcinumutt/zenith-cli`) for tasks, habits, projects and time tracking. Cobra commands + Bubble Tea TUI + SQLite.
 
 - `main.go` → `cmd.Execute()`. Each file in `cmd/` registers one cobra command tree (task, habit, project, plan, summary, log, search, timer, ai, tui, update).
 - `cmd/root.go` holds the package-level `store storage.Store`, initialized in `PersistentPreRunE` for **every** command (opens the DB, runs schema + migrations). It also runs `checkExpiredTimersPassive()`, which fires macOS notifications (`osascript`) for due scheduled timers on any invocation; this is skipped for the `daemon` command (`cmd/timer.go`), which polls actively.
@@ -25,7 +25,7 @@ Go CLI (module `github.com/yalcinumut/zenith-cli`) for tasks, habits, projects a
 - `internal/ai`: talks to a local OpenAI-compatible endpoint (Ollama or LM Studio), configured via env vars `ZENITH_AI_PROVIDER` (`ollama` default / `lmstudio`), `ZENITH_AI_URL`, `ZENITH_AI_MODEL`. Used by `cmd/ai.go` for task suggestions and summaries.
 - `website/`: static marketing/docs site (plain HTML/CSS/JS), independent of the Go build. `dist/` is GoReleaser output.
 
-Note: `go.mod` requires Go 1.25 while the release workflow pins Go 1.22 and README/CONTRIBUTING mention older versions; trust `go.mod`.
+Note: CI and the release workflow read the Go version from `go.mod`; README/CONTRIBUTING may mention older versions, so trust `go.mod`.
 
 ## Agent skills
 

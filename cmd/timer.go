@@ -2,12 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"os/exec"
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/yalcinumut/zenith-cli/internal/models"
-	"github.com/yalcinumut/zenith-cli/internal/ui"
+	"github.com/yalcinumutt/zenith-cli/internal/models"
+	"github.com/yalcinumutt/zenith-cli/internal/ui"
 )
 
 var timerCmd = &cobra.Command{
@@ -118,10 +117,7 @@ var timerDaemonCmd = &cobra.Command{
 }
 
 func triggerDesktopNotification(message string) {
-	// macOS native notification using AppleScript
-	script := fmt.Sprintf(`display notification "%s" with title "Zenith Reminder" sound name "Glass"`, message)
-	cmd := exec.Command("osascript", "-e", script)
-	_ = cmd.Run()
+	sendDesktopNotification(message)
 
 	// Terminal bell/alert sound
 	fmt.Print("\a")
