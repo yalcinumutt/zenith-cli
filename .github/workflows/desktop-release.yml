@@ -85,8 +85,6 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
           NEEDRESTART_MODE: a
         run: |
-          # The Azure mirror on GitHub runners can stall on package downloads; prefer the main archive.
-          printf 'http://archive.ubuntu.com/ubuntu/\tpriority:1\nhttp://azure.archive.ubuntu.com/ubuntu/\tpriority:2\n' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
           sudo -E apt-get update
           sudo -E apt-get install -y --no-install-recommends build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev libwayland-dev rpm libfuse2t64 || sudo -E apt-get install -y --no-install-recommends libfuse2
       - name: Windows installer tooling

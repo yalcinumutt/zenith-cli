@@ -69,8 +69,6 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
           NEEDRESTART_MODE: a
         run: |
-          # The Azure mirror on GitHub runners can stall on package downloads; prefer the main archive.
-          printf 'http://archive.ubuntu.com/ubuntu/\tpriority:1\nhttp://azure.archive.ubuntu.com/ubuntu/\tpriority:2\n' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
           sudo -E apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update
           sudo -E apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y --no-install-recommends build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev libwayland-dev
       - name: Install Wails CLI
