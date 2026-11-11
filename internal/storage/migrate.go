@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/yalcinumutt/zenith-cli/internal/models"
+	"github.com/yalcinumutt/zenith-cli/internal/orderkey"
 )
 
 func migrate(db *sql.DB) error {
@@ -101,7 +102,12 @@ func migrate(db *sql.DB) error {
 	}
 
 	// 12. When / Deadline replace planned_date / due_date (ADR 0004).
-	return migrateWhenDeadline(db)
+	if err := migrateWhenDeadline(db); err != nil {
+		return err
+	}
+
+	// 13. Manual ordering by fractional index (ADR 0007).
+	return migrateSortKeys(db)
 }
 
 // uuidTables are the tables with an integer `id` handle. The task_tags join
@@ -376,4 +382,64 @@ func migrateWhenDeadline(db *sql.DB) error {
 		}
 	}
 	return tx.Commit()
+}
+
+// migrateSortKeys adds sort_key to the orderable tables and numbers rows that
+// have none in their existing (id) order, so today's apparent order is kept.
+// Rows that already have a key are left alone; new numbering continues after them.
+func migrateSortKeys(db *sql.DB) error {
+	for table := range sortKeyTables {
+		if !columnExists(db, table, "id") {
+			continue
+		}
+		if err := addColumn(db, table, "sort_key", "TEXT"); err != nil {
+			return err
+		}
+		rows, err := db.Query("SELECT id FROM " + table + " WHERE sort_key IS NULL OR sort_key = '' ORDER BY id")
+		if err != nil {
+			return err
+		}
+		var ids []int64
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return err
+			}
+			ids = append(ids, id)
+		}
+		rows.Close()
+		if len(ids) == 0 {
+			continue
+		}
+		var max sql.NullString
+		if err := db.QueryRow("SELECT MAX(sort_key) FROM " + table).Scan(&max); err != nil {
+			return err
+		}
+		keys := orderkey.Initial(len(ids))
+		if max.String != "" { // continue after what exists
+			prev := max.String
+			for i := range keys {
+				k, err := orderkey.Between(prev, "")
+				if err != nil {
+					return err
+				}
+				keys[i], prev = k, k
+			}
+		}
+		tx, err := db.Begin()
+		if err != nil {
+			return err
+		}
+		for i, id := range ids {
+			if _, err := tx.Exec("UPDATE "+table+" SET sort_key = ? WHERE id = ?", keys[i], id); err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+	}
+	return nil
 }

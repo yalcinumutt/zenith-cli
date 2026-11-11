@@ -295,6 +295,50 @@ var taskDeadlineCmd = &cobra.Command{
 	},
 }
 
+var (
+	reorderAfter, reorderBefore int64
+	reorderHeading              string
+	reorderEvening, reorderDay  bool
+)
+
+var taskReorderCmd = &cobra.Command{
+	Use:   "reorder [id]",
+	Short: "Move a task between two neighbours, optionally to another heading or This Evening",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := parseID("task ID", args[0])
+		if err != nil {
+			return err
+		}
+		var p core.Placement
+		if reorderAfter != 0 {
+			p.AfterID = &reorderAfter
+		}
+		if reorderBefore != 0 {
+			p.BeforeID = &reorderBefore
+		}
+		if reorderHeading != "" {
+			hid, err := parseOptionalID("heading ID", reorderHeading)
+			if err != nil {
+				return err
+			}
+			p.Heading = &core.HeadingChange{HeadingID: hid}
+		}
+		if reorderEvening && reorderDay {
+			return fmt.Errorf("use only one of --evening and --day")
+		}
+		if reorderEvening || reorderDay {
+			v := reorderEvening
+			p.Evening = &v
+		}
+		if err := app.Tasks.Place(id, p); err != nil {
+			return err
+		}
+		fmt.Printf("Task %d moved.\n", id)
+		return nil
+	},
+}
+
 var taskAreaCmd = &cobra.Command{
 	Use:   "area [id] [areaID|none]",
 	Short: "File a task directly in an area, or unfile it with 'none'",
@@ -504,6 +548,11 @@ func init() {
 	taskAddCmd.Flags().BoolVar(&eveningFlag, "evening", false, "Put the task under This Evening (needs a scheduled --when)")
 	taskAddCmd.Flags().StringVarP(&priorityStr, "priority", "P", "medium", "Priority (low, medium, high, critical)")
 	taskWhenCmd.Flags().BoolVar(&eveningFlag, "evening", false, "Put the task under This Evening")
+	taskReorderCmd.Flags().Int64Var(&reorderAfter, "after", 0, "Place the task right after this task ID")
+	taskReorderCmd.Flags().Int64Var(&reorderBefore, "before", 0, "Place the task right before this task ID")
+	taskReorderCmd.Flags().StringVar(&reorderHeading, "heading", "", "Move under this heading ID, or 'none'")
+	taskReorderCmd.Flags().BoolVar(&reorderEvening, "evening", false, "Move to This Evening")
+	taskReorderCmd.Flags().BoolVar(&reorderDay, "day", false, "Move back to the day section")
 	taskTagCmd.Flags().StringVarP(&tagColor, "color", "c", "", "Color for the tag")
 
 	rootCmd.AddCommand(taskCmd)
@@ -514,6 +563,7 @@ func init() {
 	taskCmd.AddCommand(taskReopenCmd)
 	taskCmd.AddCommand(taskParentCmd)
 	taskCmd.AddCommand(taskAreaCmd)
+	taskCmd.AddCommand(taskReorderCmd)
 	taskCmd.AddCommand(taskWhenCmd)
 	taskCmd.AddCommand(taskDeadlineCmd)
 	taskCmd.AddCommand(taskHeadingCmd)

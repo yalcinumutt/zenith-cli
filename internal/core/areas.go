@@ -32,7 +32,14 @@ func (s *AreaService) Add(name string) (*models.Area, error) {
 		return nil, err
 	}
 	a := &models.Area{Name: name}
-	if err := s.store.AddArea(a); err != nil {
+	err = s.store.WithTx(func(tx storage.Store) error {
+		var err error
+		if a.SortKey, err = appendKey(tx, "areas"); err != nil {
+			return err
+		}
+		return tx.AddArea(a)
+	})
+	if err != nil {
 		return nil, err
 	}
 	s.announce()
@@ -131,6 +138,9 @@ func (s *HeadingService) Add(projectID int64, title string) (*models.Heading, er
 		if _, err := tx.GetProject(projectID); errors.Is(err, storage.ErrNotFound) {
 			return &NotFoundError{Entity: "project", ID: projectID}
 		} else if err != nil {
+			return err
+		}
+		if h.SortKey, err = appendKey(tx, "headings"); err != nil {
 			return err
 		}
 		return tx.AddHeading(h)

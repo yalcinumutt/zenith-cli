@@ -9,6 +9,7 @@ type Project struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	Status      string    `json:"status"` // open, completed, cancelled
+	SortKey     string    `json:"sort_key"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -18,6 +19,7 @@ type Area struct {
 	ID        int64     `json:"id"`
 	UUID      string    `json:"uuid"`
 	Name      string    `json:"name"`
+	SortKey   string    `json:"sort_key"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -29,6 +31,7 @@ type Heading struct {
 	UUID      string    `json:"uuid"`
 	ProjectID int64     `json:"project_id"`
 	Title     string    `json:"title"`
+	SortKey   string    `json:"sort_key"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

@@ -105,6 +105,9 @@ func (s *TaskService) Add(in AddTaskInput) (*models.Task, error) {
 		if err := s.normalizeContainer(tx, task); err != nil {
 			return err
 		}
+		if task.SortKey, err = appendKey(tx, "tasks"); err != nil {
+			return err
+		}
 		if err := tx.AddTask(task); err != nil {
 			return err
 		}

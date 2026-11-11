@@ -50,6 +50,9 @@ func (s *ProjectService) Add(name string, areaID *int64) (*models.Project, error
 				return err
 			}
 		}
+		if p.SortKey, err = appendKey(tx, "projects"); err != nil {
+			return err
+		}
 		return tx.AddProject(p)
 	})
 	if err != nil {

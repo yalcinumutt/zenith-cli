@@ -13,6 +13,10 @@ type Store interface {
 	// WithTx runs fn against a store bound to one transaction.
 	WithTx(fn func(Store) error) error
 
+	// MaxSortKey is the greatest manual-order key in tasks, projects, areas or
+	// headings ("" when none); the core appends new rows after it.
+	MaxSortKey(table string) (string, error)
+
 	// DataVersion is SQLite's change counter for this connection: it moves only
 	// when a different connection or process commits a write.
 	DataVersion() (int64, error)

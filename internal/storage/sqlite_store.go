@@ -126,8 +126,8 @@ func NewSQLiteStoreAtPath(dbPath string) (*SQLiteStore, error) {
 
 func (s *SQLiteStore) AddTask(task *models.Task) error {
 	task.UUID = newUUID()
-	query := `INSERT INTO tasks (uuid, project_id, area_id, heading_id, parent_task_id, title, description, status, priority, when_kind, when_date, deadline, evening, recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	res, err := s.q.Exec(query, task.UUID, task.ProjectID, task.AreaID, task.HeadingID, task.ParentID, task.Title, task.Description, task.Status, task.Priority, whenKindOrDefault(task.When), nullIfEmpty(task.When.Date), nullIfEmpty(task.Deadline), task.Evening, task.Recurring)
+	query := `INSERT INTO tasks (uuid, project_id, area_id, heading_id, parent_task_id, title, description, status, priority, when_kind, when_date, deadline, evening, recurring, sort_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	res, err := s.q.Exec(query, task.UUID, task.ProjectID, task.AreaID, task.HeadingID, task.ParentID, task.Title, task.Description, task.Status, task.Priority, whenKindOrDefault(task.When), nullIfEmpty(task.When.Date), nullIfEmpty(task.Deadline), task.Evening, task.Recurring, nullIfEmpty(task.SortKey))
 	if err != nil {
 		return fmt.Errorf("could not insert task: %w", err)
 	}
@@ -141,9 +141,12 @@ func (s *SQLiteStore) AddTask(task *models.Task) error {
 	return nil
 }
 
+// taskOrder is the one place task order is defined: fractional index, then uuid.
+const taskOrder = " ORDER BY t.sort_key, t.uuid"
+
 const taskSelect = `
 		SELECT 
-			t.id, t.uuid, t.project_id, t.area_id, t.heading_id, t.parent_task_id, t.title, t.description, t.status, t.priority, t.when_kind, t.when_date, t.deadline, t.evening, t.recurring, t.created_at, t.updated_at,
+			t.id, t.uuid, t.project_id, t.area_id, t.heading_id, t.parent_task_id, t.title, t.description, t.status, t.priority, t.when_kind, t.when_date, t.deadline, t.evening, t.recurring, t.sort_key, t.created_at, t.updated_at,
 			EXISTS(SELECT 1 FROM task_time_logs WHERE task_id = t.id AND end_time IS NULL) as is_running,
 			COALESCE((SELECT SUM(strftime('%s', COALESCE(end_time, CURRENT_TIMESTAMP)) - strftime('%s', start_time)) FROM task_time_logs WHERE task_id = t.id), 0) as total_time
 		FROM tasks t`
@@ -159,7 +162,8 @@ func (s *SQLiteStore) queryTasks(where string, args ...any) ([]models.Task, erro
 		var t models.Task
 		var whenKind, whenDate, deadline sql.NullString
 		var evening sql.NullBool
-		err := rows.Scan(&t.ID, &t.UUID, &t.ProjectID, &t.AreaID, &t.HeadingID, &t.ParentID, &t.Title, &t.Description, &t.Status, &t.Priority, &whenKind, &whenDate, &deadline, &evening, &t.Recurring, &t.CreatedAt, &t.UpdatedAt, &t.IsRunning, &t.TotalTime)
+		var sortKey sql.NullString
+		err := rows.Scan(&t.ID, &t.UUID, &t.ProjectID, &t.AreaID, &t.HeadingID, &t.ParentID, &t.Title, &t.Description, &t.Status, &t.Priority, &whenKind, &whenDate, &deadline, &evening, &t.Recurring, &sortKey, &t.CreatedAt, &t.UpdatedAt, &t.IsRunning, &t.TotalTime)
 		if err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("could not scan task: %w", err)
@@ -168,7 +172,7 @@ func (s *SQLiteStore) queryTasks(where string, args ...any) ([]models.Task, erro
 		if t.When.Kind == "" {
 			t.When.Kind = models.WhenAnytime
 		}
-		t.Deadline, t.Evening = deadline.String, evening.Bool
+		t.Deadline, t.Evening, t.SortKey = deadline.String, evening.Bool, sortKey.String
 		tasks = append(tasks, t)
 	}
 	if err := rows.Err(); err != nil {
@@ -189,12 +193,12 @@ func (s *SQLiteStore) queryTasks(where string, args ...any) ([]models.Task, erro
 }
 
 func (s *SQLiteStore) GetTasks() ([]models.Task, error) {
-	return s.queryTasks(" ORDER BY t.id")
+	return s.queryTasks(taskOrder)
 }
 
 // GetSubtasks returns the direct children of a task, oldest first.
 func (s *SQLiteStore) GetSubtasks(parentID int64) ([]models.Task, error) {
-	return s.queryTasks(" WHERE t.parent_task_id = ? ORDER BY t.id", parentID)
+	return s.queryTasks(" WHERE t.parent_task_id = ?"+taskOrder, parentID)
 }
 
 // GetTask returns ErrNotFound when no task has the given id.
@@ -216,8 +220,8 @@ func (s *SQLiteStore) UpdateTask(task *models.Task) error {
 	if !task.UpdatedAt.IsZero() {
 		updated = formatTime(task.UpdatedAt)
 	}
-	query := `UPDATE tasks SET project_id = ?, area_id = ?, heading_id = ?, parent_task_id = ?, title = ?, description = ?, status = ?, priority = ?, when_kind = ?, when_date = ?, deadline = ?, evening = ?, recurring = ?, updated_at = COALESCE(?, CURRENT_TIMESTAMP) WHERE id = ?`
-	_, err := s.q.Exec(query, task.ProjectID, task.AreaID, task.HeadingID, task.ParentID, task.Title, task.Description, task.Status, task.Priority, whenKindOrDefault(task.When), nullIfEmpty(task.When.Date), nullIfEmpty(task.Deadline), task.Evening, task.Recurring, updated, task.ID)
+	query := `UPDATE tasks SET project_id = ?, area_id = ?, heading_id = ?, parent_task_id = ?, title = ?, description = ?, status = ?, priority = ?, when_kind = ?, when_date = ?, deadline = ?, evening = ?, recurring = ?, sort_key = ?, updated_at = COALESCE(?, CURRENT_TIMESTAMP) WHERE id = ?`
+	_, err := s.q.Exec(query, task.ProjectID, task.AreaID, task.HeadingID, task.ParentID, task.Title, task.Description, task.Status, task.Priority, whenKindOrDefault(task.When), nullIfEmpty(task.When.Date), nullIfEmpty(task.Deadline), task.Evening, task.Recurring, nullIfEmpty(task.SortKey), updated, task.ID)
 	if err != nil {
 		return fmt.Errorf("could not update task: %w", err)
 	}
@@ -289,7 +293,7 @@ func (s *SQLiteStore) LogHabit(habitID int64) error {
 
 func (s *SQLiteStore) AddProject(project *models.Project) error {
 	project.UUID = newUUID()
-	res, err := s.q.Exec("INSERT INTO projects (uuid, area_id, name, description, status) VALUES (?, ?, ?, ?, ?)", project.UUID, project.AreaID, project.Name, project.Description, project.Status)
+	res, err := s.q.Exec("INSERT INTO projects (uuid, area_id, name, description, status, sort_key) VALUES (?, ?, ?, ?, ?, ?)", project.UUID, project.AreaID, project.Name, project.Description, project.Status, nullIfEmpty(project.SortKey))
 	if err != nil {
 		return err
 	}
@@ -302,7 +306,7 @@ func (s *SQLiteStore) AddProject(project *models.Project) error {
 }
 
 func (s *SQLiteStore) GetProjects() ([]models.Project, error) {
-	rows, err := s.q.Query("SELECT id, uuid, area_id, name, description, status, created_at, updated_at FROM projects ORDER BY id")
+	rows, err := s.q.Query("SELECT id, uuid, area_id, name, description, status, sort_key, created_at, updated_at FROM projects ORDER BY sort_key, uuid")
 	if err != nil {
 		return nil, err
 	}
@@ -311,9 +315,11 @@ func (s *SQLiteStore) GetProjects() ([]models.Project, error) {
 	var projects []models.Project
 	for rows.Next() {
 		var p models.Project
-		if err := rows.Scan(&p.ID, &p.UUID, &p.AreaID, &p.Name, &p.Description, &p.Status, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		var sortKey sql.NullString
+		if err := rows.Scan(&p.ID, &p.UUID, &p.AreaID, &p.Name, &p.Description, &p.Status, &sortKey, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
+		p.SortKey = sortKey.String
 		projects = append(projects, p)
 	}
 	return projects, nil
@@ -540,4 +546,17 @@ func nullIfEmpty(s string) any {
 		return nil
 	}
 	return s
+}
+
+// sortKeyTables are the tables with manual ordering.
+var sortKeyTables = map[string]bool{"tasks": true, "projects": true, "areas": true, "headings": true}
+
+// MaxSortKey returns the greatest sort key in the table, or "" when it has none.
+func (s *SQLiteStore) MaxSortKey(table string) (string, error) {
+	if !sortKeyTables[table] {
+		return "", fmt.Errorf("table %q has no sort key", table)
+	}
+	var k sql.NullString
+	err := s.q.QueryRow("SELECT MAX(sort_key) FROM " + table).Scan(&k)
+	return k.String, err
 }

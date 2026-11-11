@@ -35,6 +35,7 @@ const (
 	ChangeTimer   ChangeKind = "timer"   // time tracking started or stopped
 	ChangeTagged  ChangeKind = "tagged"  // a tag was attached
 	ChangeDeleted ChangeKind = "deleted" // the task was removed
+	ChangeOrder   ChangeKind = "order"   // moved: position, heading or evening section
 )
 
 // List keys carried by ListsInvalidated.

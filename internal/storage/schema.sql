@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS areas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     uuid TEXT,
     name TEXT NOT NULL,
+    sort_key TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -13,6 +14,7 @@ CREATE TABLE IF NOT EXISTS headings (
     uuid TEXT,
     project_id INTEGER NOT NULL,
     title TEXT NOT NULL,
+    sort_key TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
