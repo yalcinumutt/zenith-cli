@@ -15,7 +15,7 @@ var planCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println(ui.HeaderStyle.Render(" Daily Planning "))
 
-		tasks, err := store.GetTasks()
+		tasks, err := app.Tasks.List()
 		if err != nil {
 			return err
 		}
@@ -46,8 +46,7 @@ var planCmd = &cobra.Command{
 
 			for i := range tasks {
 				if tasks[i].ID == id {
-					tasks[i].PlannedDate = &today
-					if err := store.UpdateTask(&tasks[i]); err != nil {
+					if err := app.Tasks.Plan(id, today); err != nil {
 						fmt.Printf("Error updating task %d: %v\n", id, err)
 					} else {
 						fmt.Printf("Added '%s' to today's plan!\n", tasks[i].Title)

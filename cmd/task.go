@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/yalcinumutt/zenith-cli/internal/core"
 	"github.com/yalcinumutt/zenith-cli/internal/models"
 )
 
@@ -27,14 +28,14 @@ var taskAddCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		title := strings.Join(args, " ")
-		task := &models.Task{
+		in := core.AddTaskInput{
 			Title:     title,
-			Status:    "todo",
 			Recurring: recurring,
+			Priority:  models.PriorityMedium,
 		}
 
 		if projectID != 0 {
-			task.ProjectID = &projectID
+			in.ProjectID = &projectID
 		}
 
 		if dueStr != "" {
@@ -42,25 +43,26 @@ var taskAddCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("invalid due date format (use YYYY-MM-DD): %w", err)
 			}
-			task.DueDate = &t
+			in.DueDate = &t
 		}
 
 		if priorityStr != "" {
 			switch strings.ToLower(priorityStr) {
 			case "low":
-				task.Priority = models.PriorityLow
+				in.Priority = models.PriorityLow
 			case "medium":
-				task.Priority = models.PriorityMedium
+				in.Priority = models.PriorityMedium
 			case "high":
-				task.Priority = models.PriorityHigh
+				in.Priority = models.PriorityHigh
 			case "critical":
-				task.Priority = models.PriorityCritical
+				in.Priority = models.PriorityCritical
 			default:
 				return fmt.Errorf("invalid priority: %s (use low, medium, high, critical)", priorityStr)
 			}
 		}
 
-		if err := store.AddTask(task); err != nil {
+		task, err := app.Tasks.Add(in)
+		if err != nil {
 			return err
 		}
 		fmt.Printf("Task added with ID: %d\n", task.ID)
@@ -72,7 +74,7 @@ var taskListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all tasks",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		tasks, err := store.GetTasks()
+		tasks, err := app.Tasks.List()
 		if err != nil {
 			return err
 		}
@@ -116,25 +118,7 @@ var taskDoneCmd = &cobra.Command{
 			return fmt.Errorf(errMsgInvalidID, err)
 		}
 
-		tasks, err := store.GetTasks()
-		if err != nil {
-			return err
-		}
-
-		var target *models.Task
-		for _, t := range tasks {
-			if t.ID == id {
-				target = &t
-				break
-			}
-		}
-
-		if target == nil {
-			return fmt.Errorf("task with ID %d not found", id)
-		}
-
-		target.Status = "done"
-		if err := store.UpdateTask(target); err != nil {
+		if err := app.Tasks.Complete(id); err != nil {
 			return err
 		}
 
@@ -155,7 +139,7 @@ var taskStartCmd = &cobra.Command{
 			return fmt.Errorf(errMsgInvalidID, err)
 		}
 
-		if err := store.StartTaskTimer(id); err != nil {
+		if err := app.Tasks.StartTimer(id); err != nil {
 			return err
 		}
 
@@ -174,7 +158,7 @@ var taskStopCmd = &cobra.Command{
 			return fmt.Errorf(errMsgInvalidID, err)
 		}
 
-		if err := store.StopTaskTimer(id); err != nil {
+		if err := app.Tasks.StopTimer(id); err != nil {
 			return err
 		}
 
@@ -194,17 +178,8 @@ var taskTagCmd = &cobra.Command{
 		}
 
 		tagName := args[1]
-		tag := &models.Tag{
-			Name:  tagName,
-			Color: tagColor,
-		}
-
-		if err := store.AddTag(tag); err != nil {
-			return fmt.Errorf("could not create tag: %w", err)
-		}
-
-		if err := store.AttachTagToTask(id, tag.ID); err != nil {
-			return fmt.Errorf("could not attach tag: %w", err)
+		if err := app.Tasks.Tag(id, tagName, tagColor); err != nil {
+			return err
 		}
 
 		fmt.Printf("Added tag '%s' to task %d\n", tagName, id)
@@ -222,7 +197,7 @@ var taskDeleteCmd = &cobra.Command{
 			return fmt.Errorf(errMsgInvalidID, err)
 		}
 
-		if err := store.DeleteTask(id); err != nil {
+		if err := app.Tasks.Delete(id); err != nil {
 			return err
 		}
 
@@ -246,27 +221,7 @@ var taskMoveCmd = &cobra.Command{
 			return fmt.Errorf("invalid project ID: %w", err)
 		}
 
-		// Get all tasks to find the target task
-		tasks, err := store.GetTasks()
-		if err != nil {
-			return err
-		}
-
-		var target *models.Task
-		for _, t := range tasks {
-			if t.ID == taskID {
-				target = &t
-				break
-			}
-		}
-
-		if target == nil {
-			return fmt.Errorf("task with ID %d not found", taskID)
-		}
-
-		// Update project ID
-		target.ProjectID = &projectID
-		if err := store.UpdateTask(target); err != nil {
+		if err := app.Tasks.MoveToProject(taskID, projectID); err != nil {
 			return err
 		}
 
@@ -285,7 +240,7 @@ var taskHistoryCmd = &cobra.Command{
 			return fmt.Errorf(errMsgInvalidID, err)
 		}
 
-		history, err := store.GetTaskHistory(id)
+		history, err := app.Tasks.History(id)
 		if err != nil {
 			return err
 		}

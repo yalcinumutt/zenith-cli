@@ -41,11 +41,13 @@ func TestSQLiteStore_TasksWithTagsAndTimers(t *testing.T) {
 	}
 
 	// 3. Start/Stop timer
-	if err := db.StartTaskTimer(task.ID); err != nil {
-		t.Fatalf("failed to start timer: %v", err)
+	start := time.Date(2026, 1, 2, 9, 0, 0, 0, time.UTC)
+	if err := db.OpenTimeLog(task.ID, start); err != nil {
+		t.Fatalf("failed to open time log: %v", err)
 	}
-	if err := db.StopTaskTimer(task.ID); err != nil {
-		t.Fatalf("failed to stop timer: %v", err)
+	secs, closed, err := db.CloseOpenTimeLog(task.ID, start.Add(90*time.Second))
+	if err != nil || !closed || secs != 90 {
+		t.Fatalf("CloseOpenTimeLog = %d, %v, %v; want 90, true, nil", secs, closed, err)
 	}
 
 	// 4. Verify results
@@ -164,55 +166,60 @@ func TestSQLiteStore_TaskHistory(t *testing.T) {
 	}
 	defer db.Close()
 
-	// 1. Add a task and verify it creates an 'created' history log
-	task := &models.Task{
-		Title:  "History Test Task",
-		Status: "todo",
-	}
+	task := &models.Task{Title: "History Test Task", Status: "todo"}
 	if err := db.AddTask(task); err != nil {
 		t.Fatalf("failed to add task: %v", err)
 	}
 
+	// The store records exactly what it is told; rules live in core.
 	history, err := db.GetTaskHistory(task.ID)
-	if err != nil {
-		t.Fatalf("failed to get task history: %v", err)
+	if err != nil || len(history) != 0 {
+		t.Fatalf("expected no history from a plain insert, got %d (err %v)", len(history), err)
 	}
 
-	if len(history) != 1 || history[0].Action != "created" {
-		t.Errorf("expected 1 history record with action 'created', got %d", len(history))
-	}
-
-	// 2. Start/Stop timer and verify history entries are added
-	if err := db.StartTaskTimer(task.ID); err != nil {
-		t.Fatalf("failed to start task timer: %v", err)
-	}
-	if err := db.StopTaskTimer(task.ID); err != nil {
-		t.Fatalf("failed to stop task timer: %v", err)
+	stamp := time.Date(2026, 1, 2, 9, 30, 0, 0, time.UTC)
+	for _, action := range []string{"created", "edited"} {
+		if err := db.AddTaskHistory(&models.TaskHistory{TaskID: task.ID, Action: action, Details: "d", Timestamp: stamp}); err != nil {
+			t.Fatalf("failed to add history: %v", err)
+		}
 	}
 
 	history, err = db.GetTaskHistory(task.ID)
 	if err != nil {
 		t.Fatalf("failed to get task history: %v", err)
 	}
-
-	// We expect: created, started_timer, stopped_timer (sorted DESC by timestamp)
-	if len(history) != 3 {
-		t.Errorf("expected 3 history records, got %d", len(history))
+	if len(history) != 2 || history[0].Action != "edited" {
+		t.Fatalf("expected 2 records newest first, got %+v", history)
 	}
-
-	// 3. Update task status and verify status_changed log
-	task.Status = "done"
-	if err := db.UpdateTask(task); err != nil {
-		t.Fatalf("failed to update task: %v", err)
+	if !history[0].Timestamp.Equal(stamp) {
+		t.Errorf("timestamp = %v, want %v", history[0].Timestamp, stamp)
 	}
+}
 
-	history, err = db.GetTaskHistory(task.ID)
+func TestSQLiteStore_WithTxRollsBackOnError(t *testing.T) {
+	db, err := NewSQLiteStoreAtPath(filepath.Join(t.TempDir(), "tx.db"))
 	if err != nil {
-		t.Fatalf("failed to get task history: %v", err)
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	boom := fmt.Errorf("boom")
+	err = db.WithTx(func(tx Store) error {
+		if err := tx.AddTask(&models.Task{Title: "rolled back", Status: "todo"}); err != nil {
+			return err
+		}
+		return boom
+	})
+	if err != boom {
+		t.Fatalf("WithTx err = %v, want boom", err)
+	}
+	tasks, _ := db.GetTasks()
+	if len(tasks) != 0 {
+		t.Errorf("expected rollback, found %d tasks", len(tasks))
 	}
 
-	if len(history) != 4 || history[0].Action != "status_changed" {
-		t.Errorf("expected 4 history records, first one 'status_changed', got %d", len(history))
+	if _, err := db.GetTask(999); err != ErrNotFound {
+		t.Errorf("GetTask(999) err = %v, want ErrNotFound", err)
 	}
 }
 

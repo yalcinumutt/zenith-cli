@@ -1,17 +1,26 @@
 package storage
 
 import (
+	"time"
+
 	"github.com/yalcinumutt/zenith-cli/internal/models"
 )
 
+// Store is plain persistence: it records what it is told and applies no
+// business rules. Rules (history, status transitions, timer exclusivity,
+// not-found errors) live in internal/core.
 type Store interface {
+	// WithTx runs fn against a store bound to one transaction.
+	WithTx(fn func(Store) error) error
+
 	// Tasks
 	AddTask(task *models.Task) error
 	GetTasks() ([]models.Task, error)
+	GetTask(id int64) (*models.Task, error) // ErrNotFound when absent
 	UpdateTask(task *models.Task) error
 	DeleteTask(id int64) error
-	StartTaskTimer(taskID int64) error
-	StopTaskTimer(taskID int64) error
+	OpenTimeLog(taskID int64, start time.Time) error
+	CloseOpenTimeLog(taskID int64, end time.Time) (secs int64, closed bool, err error)
 
 	// Tags
 	AddTag(tag *models.Tag) error

@@ -14,7 +14,7 @@ var logCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println(ui.HeaderStyle.Render(" Zenith Activity Log "))
 
-		tasks, err := store.GetTasks()
+		tasks, err := app.Tasks.List()
 		if err != nil {
 			return err
 		}

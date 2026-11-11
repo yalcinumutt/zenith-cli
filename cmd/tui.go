@@ -9,7 +9,7 @@ var tuiCmd = &cobra.Command{
 	Use:   "tui",
 	Short: "Open the interactive TUI dashboard",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return tui.Start(store)
+		return tui.Start(app)
 	},
 }
 

@@ -7,21 +7,21 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/yalcinumutt/zenith-cli/internal/models"
-	"github.com/yalcinumutt/zenith-cli/internal/storage"
+	"github.com/yalcinumutt/zenith-cli/internal/core"
 	"github.com/yalcinumutt/zenith-cli/internal/ui"
 )
 
 type model struct {
-	store    storage.Store
+	app      *core.Core
 	tasks    []models.Task
 	cursor   int
 	selected int
 	err      error
 }
 
-func NewModel(s storage.Store) model {
+func NewModel(c *core.Core) model {
 	return model{
-		store: s,
+		app: c,
 	}
 }
 
@@ -38,7 +38,7 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) fetchTasks() tea.Msg {
-	tasks, err := m.store.GetTasks()
+	tasks, err := m.app.Tasks.List()
 	if err != nil {
 		return err
 	}
@@ -88,16 +88,12 @@ func (m model) toggleTaskStatus() (tea.Model, tea.Cmd) {
 	if len(m.tasks) == 0 {
 		return m, nil
 	}
-	task := &m.tasks[m.cursor]
-	if task.Status == "done" {
-		task.Status = "todo"
+	task := m.tasks[m.cursor]
+	if task.Status == core.StatusDone {
+		_ = m.app.Tasks.Reopen(task.ID)
 	} else {
-		task.Status = "done"
-		if task.IsRunning {
-			_ = m.store.StopTaskTimer(task.ID)
-		}
+		_ = m.app.Tasks.Complete(task.ID)
 	}
-	_ = m.store.UpdateTask(task)
 	return m, m.fetchTasks
 }
 
@@ -107,9 +103,9 @@ func (m model) toggleTaskTimer() (tea.Model, tea.Cmd) {
 	}
 	task := m.tasks[m.cursor]
 	if task.IsRunning {
-		_ = m.store.StopTaskTimer(task.ID)
+		_ = m.app.Tasks.StopTimer(task.ID)
 	} else {
-		_ = m.store.StartTaskTimer(task.ID)
+		_ = m.app.Tasks.StartTimer(task.ID)
 	}
 	return m, m.fetchTasks
 }
@@ -199,8 +195,8 @@ func (m model) View() string {
 	return ui.BorderStyle.Render(s)
 }
 
-func Start(s storage.Store) error {
-	p := tea.NewProgram(NewModel(s))
+func Start(c *core.Core) error {
+	p := tea.NewProgram(NewModel(c))
 	if _, err := p.Run(); err != nil {
 		return err
 	}

@@ -7,11 +7,13 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
+	"github.com/yalcinumutt/zenith-cli/internal/core"
 	"github.com/yalcinumutt/zenith-cli/internal/storage"
 )
 
 var (
 	store   storage.Store
+	app     *core.Core
 	Version = "v0.1.2"
 )
 
@@ -26,6 +28,7 @@ var rootCmd = &cobra.Command{
 			return err
 		}
 		store = s
+		app = core.New(s, core.SystemClock{}, core.NopNotifier{})
 
 		// Don't run passive check for the timer daemon itself to avoid loops
 		if cmd.Name() != "daemon" {
