@@ -86,6 +86,10 @@ func openDB(dbPath string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not open database: %w", err)
 	}
+	// One connection per process: SQLite serializes writers anyway, and it
+	// keeps PRAGMA data_version meaningful - it then changes only when another
+	// process writes, which is how the core detects external changes.
+	db.SetMaxOpenConns(1)
 	if err := db.Ping(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("could not open database: %w", err)
@@ -468,4 +472,13 @@ func (s *SQLiteStore) GetTaskHistory(taskID int64) ([]models.TaskHistory, error)
 
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()
+}
+
+// DataVersion reports PRAGMA data_version. The pool is limited to one
+// connection (see openDB), so this value moves only for writes made by other
+// processes, never for this store's own.
+func (s *SQLiteStore) DataVersion() (int64, error) {
+	var v int64
+	err := s.q.QueryRow("PRAGMA data_version").Scan(&v)
+	return v, err
 }

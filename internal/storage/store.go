@@ -13,6 +13,10 @@ type Store interface {
 	// WithTx runs fn against a store bound to one transaction.
 	WithTx(fn func(Store) error) error
 
+	// DataVersion is SQLite's change counter for this connection: it moves only
+	// when a different connection or process commits a write.
+	DataVersion() (int64, error)
+
 	// Tasks
 	AddTask(task *models.Task) error
 	GetTasks() ([]models.Task, error)

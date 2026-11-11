@@ -21,6 +21,7 @@ type TaskService struct {
 	store    storage.Store
 	clock    Clock
 	notifier Notifier
+	bus      *bus
 }
 
 // AddTaskInput is what a front-end supplies to create a task.
@@ -50,6 +51,7 @@ func (s *TaskService) Add(in AddTaskInput) (*models.Task, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.changed(task.ID, ChangeCreated)
 	return task, nil
 }
 
@@ -83,17 +85,21 @@ func (s *TaskService) Plan(id int64, day time.Time) error {
 }
 
 func (s *TaskService) Delete(id int64) error {
-	return s.store.WithTx(func(tx storage.Store) error {
+	err := s.store.WithTx(func(tx storage.Store) error {
 		if _, err := s.get(tx, id); err != nil {
 			return err
 		}
 		return tx.DeleteTask(id)
 	})
+	if err == nil {
+		s.changed(id, ChangeDeleted)
+	}
+	return err
 }
 
 // Tag attaches a tag, creating it by name when needed.
 func (s *TaskService) Tag(id int64, name, color string) error {
-	return s.store.WithTx(func(tx storage.Store) error {
+	err := s.store.WithTx(func(tx storage.Store) error {
 		if _, err := s.get(tx, id); err != nil {
 			return err
 		}
@@ -106,12 +112,16 @@ func (s *TaskService) Tag(id int64, name, color string) error {
 		}
 		return nil
 	})
+	if err == nil {
+		s.changed(id, ChangeTagged)
+	}
+	return err
 }
 
 // StartTimer begins tracking time on the task. A timer already running on the
 // same task is stopped first, so a task never has two open logs.
 func (s *TaskService) StartTimer(id int64) error {
-	return s.store.WithTx(func(tx storage.Store) error {
+	err := s.store.WithTx(func(tx storage.Store) error {
 		if _, err := s.get(tx, id); err != nil {
 			return err
 		}
@@ -123,16 +133,24 @@ func (s *TaskService) StartTimer(id int64) error {
 		}
 		return s.record(tx, id, "started_timer", "Started tracking time")
 	})
+	if err == nil {
+		s.changed(id, ChangeTimer)
+	}
+	return err
 }
 
 // StopTimer ends the task's running timer; it is a no-op when none runs.
 func (s *TaskService) StopTimer(id int64) error {
-	return s.store.WithTx(func(tx storage.Store) error {
+	err := s.store.WithTx(func(tx storage.Store) error {
 		if _, err := s.get(tx, id); err != nil {
 			return err
 		}
 		return s.stopTimer(tx, id)
 	})
+	if err == nil {
+		s.changed(id, ChangeTimer)
+	}
+	return err
 }
 
 // History returns the task's events, newest first.
@@ -167,7 +185,7 @@ func (s *TaskService) stopTimer(tx storage.Store, id int64) error {
 }
 
 func (s *TaskService) setStatus(id int64, status string) error {
-	return s.store.WithTx(func(tx storage.Store) error {
+	err := s.store.WithTx(func(tx storage.Store) error {
 		t, err := s.get(tx, id)
 		if err != nil {
 			return err
@@ -179,16 +197,24 @@ func (s *TaskService) setStatus(id int64, status string) error {
 		}
 		return s.save(tx, t, func(t *models.Task) { t.Status = status })
 	})
+	if err == nil {
+		s.changed(id, ChangeStatus)
+	}
+	return err
 }
 
 func (s *TaskService) edit(id int64, mutate func(*models.Task)) error {
-	return s.store.WithTx(func(tx storage.Store) error {
+	err := s.store.WithTx(func(tx storage.Store) error {
 		t, err := s.get(tx, id)
 		if err != nil {
 			return err
 		}
 		return s.save(tx, t, mutate)
 	})
+	if err == nil {
+		s.changed(id, ChangeUpdated)
+	}
+	return err
 }
 
 // save applies mutate, persists, and records a status_changed or edited entry.
@@ -204,4 +230,9 @@ func (s *TaskService) save(tx storage.Store, t *models.Task, mutate func(*models
 			fmt.Sprintf("Status changed from '%s' to '%s'", oldStatus, t.Status))
 	}
 	return s.record(tx, t.ID, "edited", fmt.Sprintf("Task edited: '%s'", t.Title))
+}
+
+// changed announces a committed task mutation.
+func (s *TaskService) changed(id int64, kind ChangeKind) {
+	s.bus.publish(TaskChanged{TaskID: id, Kind: kind}, ListsInvalidated{Keys: []string{ListTasks}})
 }

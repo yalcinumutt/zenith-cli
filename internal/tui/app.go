@@ -1,31 +1,42 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/yalcinumutt/zenith-cli/internal/models"
 	"github.com/yalcinumutt/zenith-cli/internal/core"
+	"github.com/yalcinumutt/zenith-cli/internal/models"
 	"github.com/yalcinumutt/zenith-cli/internal/ui"
 )
 
 type model struct {
 	app      *core.Core
+	changes  <-chan struct{}
 	tasks    []models.Task
 	cursor   int
 	selected int
 	err      error
 }
 
-func NewModel(c *core.Core) model {
+func NewModel(c *core.Core, changes <-chan struct{}) model {
 	return model{
-		app: c,
+		app:     c,
+		changes: changes,
 	}
 }
 
 type tickMsg time.Time
+
+// changedMsg means the core announced a change, from this process or another.
+type changedMsg struct{}
+
+func (m model) waitForChange() tea.Msg {
+	<-m.changes
+	return changedMsg{}
+}
 
 func tickCmd() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
@@ -34,7 +45,7 @@ func tickCmd() tea.Cmd {
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.fetchTasks, tickCmd())
+	return tea.Batch(m.fetchTasks, tickCmd(), m.waitForChange)
 }
 
 func (m model) fetchTasks() tea.Msg {
@@ -51,6 +62,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tasks = msg
 	case error:
 		m.err = msg
+	case changedMsg:
+		return m, tea.Batch(m.fetchTasks, m.waitForChange)
 	case tickMsg:
 		for i, t := range m.tasks {
 			if t.IsRunning {
@@ -139,7 +152,7 @@ func (m model) View() string {
 				bar += "░"
 			}
 		}
-		progressBar = fmt.Sprintf("Progress: %d/%d completed [%s] %d%%", 
+		progressBar = fmt.Sprintf("Progress: %d/%d completed [%s] %d%%",
 			completed, len(m.tasks), lipgloss.NewStyle().Foreground(ui.SecondaryColor).Render(bar), pct)
 	} else {
 		progressBar = "Progress: No tasks tracked yet."
@@ -196,7 +209,22 @@ func (m model) View() string {
 }
 
 func Start(c *core.Core) error {
-	p := tea.NewProgram(NewModel(c))
+	// Any core event (our own edits or another process's writes) nudges the
+	// model to refetch. The channel holds one pending nudge; extras coalesce.
+	changes := make(chan struct{}, 1)
+	unsubscribe := c.Subscribe(func(core.Event) {
+		select {
+		case changes <- struct{}{}:
+		default:
+		}
+	})
+	defer unsubscribe()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = c.WatchExternal(ctx, time.Second) }()
+
+	p := tea.NewProgram(NewModel(c, changes))
 	if _, err := p.Run(); err != nil {
 		return err
 	}
