@@ -149,7 +149,7 @@ func TestLegacyRowsAndIntegerHandlesSurvive(t *testing.T) {
 	}
 
 	got, err := c.Tasks.Get(5)
-	if err != nil || len(got.Tags) != 2 || got.TotalTime != 90 || got.Recurring != "weekly" {
+	if err != nil || len(got.Tags) != 2 || got.TotalTime != 90 || got.RepeaterID == nil {
 		t.Errorf("task 5 = %+v, err %v (want 2 tags, 90s, weekly)", got, err)
 	}
 
@@ -172,10 +172,11 @@ func TestLegacyRowsAndIntegerHandlesSurvive(t *testing.T) {
 	if err := c.Habits.Log(3); err != nil {
 		t.Fatal(err)
 	}
-	// ...and new rows continue the sequence rather than reusing handles.
+	// ...and new rows continue the sequence rather than reusing handles. Task 5 was
+	// a weekly repeater, so completing it generated its next occurrence as task 8.
 	added, err := c.Tasks.Add(core.AddTaskInput{Title: "new"})
-	if err != nil || added.ID != 8 {
-		t.Errorf("new task id = %d, err %v; want 8", added.ID, err)
+	if err != nil || added.ID != 9 {
+		t.Errorf("new task id = %d, err %v; want 9", added.ID, err)
 	}
 }
 

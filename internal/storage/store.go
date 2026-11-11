@@ -55,6 +55,13 @@ type Store interface {
 	UpdateProject(project *models.Project) error
 	DeleteProject(id int64) error
 
+	// Repeaters
+	AddRepeater(r *models.Repeater) error
+	GetRepeater(id int64) (*models.Repeater, error) // ErrNotFound when absent
+	UpdateRepeater(r *models.Repeater) error
+	DeleteRepeater(id int64) error // also detaches its tasks
+	FindOccurrence(repeaterID int64, date string) (*models.Task, error)
+
 	// Areas
 	AddArea(area *models.Area) error
 	GetAreas() ([]models.Area, error)

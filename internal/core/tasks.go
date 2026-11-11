@@ -30,7 +30,7 @@ type AddTaskInput struct {
 	Deadline  string      // YYYY-MM-DD, optional
 	Evening   bool        // within Today, show under "This Evening"
 	Priority  models.Priority
-	Recurring string
+	Repeat    *models.RepeatRule // makes the task the first occurrence of a repeating series
 }
 
 // changes collects what a mutation touched so events publish only after the
@@ -68,7 +68,6 @@ func (s *TaskService) Add(in AddTaskInput) (*models.Task, error) {
 		When:      in.When,
 		Deadline:  in.Deadline,
 		Evening:   in.Evening,
-		Recurring: in.Recurring,
 	}
 	err := s.run(func(tx storage.Store, ch *changes) error {
 		if in.ParentID != nil {
@@ -104,6 +103,11 @@ func (s *TaskService) Add(in AddTaskInput) (*models.Task, error) {
 		}
 		if err := s.normalizeContainer(tx, task); err != nil {
 			return err
+		}
+		if in.Repeat != nil {
+			if err := s.attachRepeater(tx, task, *in.Repeat); err != nil {
+				return err
+			}
 		}
 		if task.SortKey, err = appendKey(tx, "tasks"); err != nil {
 			return err
@@ -440,6 +444,9 @@ func (s *TaskService) complete(tx storage.Store, ch *changes, id int64) error {
 		return err
 	}
 	ch.add(id, ChangeStatus)
+	if err := s.generateNext(tx, ch, t); err != nil {
+		return err
+	}
 	if t.ParentID != nil {
 		return s.completeParentIfDone(tx, ch, *t.ParentID)
 	}

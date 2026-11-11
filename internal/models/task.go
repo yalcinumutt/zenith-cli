@@ -55,7 +55,8 @@ type Task struct {
 	Tags        []Tag     `json:"tags"`
 	IsRunning   bool      `json:"is_running"`
 	TotalTime   int64     `json:"total_time"` // in seconds
-	Recurring   string    `json:"recurring"`  // daily, weekly, monthly, none
+	RepeaterID     *int64 `json:"repeater_id"`     // the Repeater this task is an occurrence of
+	OccurrenceDate string `json:"occurrence_date"` // the day this occurrence was generated for
 	SortKey     string    `json:"sort_key"`   // fractional index; order is (SortKey, UUID)
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`

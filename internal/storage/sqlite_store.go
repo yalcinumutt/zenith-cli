@@ -126,8 +126,8 @@ func NewSQLiteStoreAtPath(dbPath string) (*SQLiteStore, error) {
 
 func (s *SQLiteStore) AddTask(task *models.Task) error {
 	task.UUID = newUUID()
-	query := `INSERT INTO tasks (uuid, project_id, area_id, heading_id, parent_task_id, title, description, status, priority, when_kind, when_date, deadline, evening, recurring, sort_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	res, err := s.q.Exec(query, task.UUID, task.ProjectID, task.AreaID, task.HeadingID, task.ParentID, task.Title, task.Description, task.Status, task.Priority, whenKindOrDefault(task.When), nullIfEmpty(task.When.Date), nullIfEmpty(task.Deadline), task.Evening, task.Recurring, nullIfEmpty(task.SortKey))
+	query := `INSERT INTO tasks (uuid, project_id, area_id, heading_id, parent_task_id, title, description, status, priority, when_kind, when_date, deadline, evening, repeater_id, occurrence_date, sort_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	res, err := s.q.Exec(query, task.UUID, task.ProjectID, task.AreaID, task.HeadingID, task.ParentID, task.Title, task.Description, task.Status, task.Priority, whenKindOrDefault(task.When), nullIfEmpty(task.When.Date), nullIfEmpty(task.Deadline), task.Evening, task.RepeaterID, nullIfEmpty(task.OccurrenceDate), nullIfEmpty(task.SortKey))
 	if err != nil {
 		return fmt.Errorf("could not insert task: %w", err)
 	}
@@ -146,7 +146,7 @@ const taskOrder = " ORDER BY t.sort_key, t.uuid"
 
 const taskSelect = `
 		SELECT 
-			t.id, t.uuid, t.project_id, t.area_id, t.heading_id, t.parent_task_id, t.title, t.description, t.status, t.priority, t.when_kind, t.when_date, t.deadline, t.evening, t.recurring, t.sort_key, t.created_at, t.updated_at,
+			t.id, t.uuid, t.project_id, t.area_id, t.heading_id, t.parent_task_id, t.title, t.description, t.status, t.priority, t.when_kind, t.when_date, t.deadline, t.evening, t.repeater_id, t.occurrence_date, t.sort_key, t.created_at, t.updated_at,
 			EXISTS(SELECT 1 FROM task_time_logs WHERE task_id = t.id AND end_time IS NULL) as is_running,
 			COALESCE((SELECT SUM(strftime('%s', COALESCE(end_time, CURRENT_TIMESTAMP)) - strftime('%s', start_time)) FROM task_time_logs WHERE task_id = t.id), 0) as total_time
 		FROM tasks t`
@@ -162,8 +162,8 @@ func (s *SQLiteStore) queryTasks(where string, args ...any) ([]models.Task, erro
 		var t models.Task
 		var whenKind, whenDate, deadline sql.NullString
 		var evening sql.NullBool
-		var sortKey sql.NullString
-		err := rows.Scan(&t.ID, &t.UUID, &t.ProjectID, &t.AreaID, &t.HeadingID, &t.ParentID, &t.Title, &t.Description, &t.Status, &t.Priority, &whenKind, &whenDate, &deadline, &evening, &t.Recurring, &sortKey, &t.CreatedAt, &t.UpdatedAt, &t.IsRunning, &t.TotalTime)
+		var sortKey, occurrence sql.NullString
+		err := rows.Scan(&t.ID, &t.UUID, &t.ProjectID, &t.AreaID, &t.HeadingID, &t.ParentID, &t.Title, &t.Description, &t.Status, &t.Priority, &whenKind, &whenDate, &deadline, &evening, &t.RepeaterID, &occurrence, &sortKey, &t.CreatedAt, &t.UpdatedAt, &t.IsRunning, &t.TotalTime)
 		if err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("could not scan task: %w", err)
@@ -173,6 +173,7 @@ func (s *SQLiteStore) queryTasks(where string, args ...any) ([]models.Task, erro
 			t.When.Kind = models.WhenAnytime
 		}
 		t.Deadline, t.Evening, t.SortKey = deadline.String, evening.Bool, sortKey.String
+		t.OccurrenceDate = occurrence.String
 		tasks = append(tasks, t)
 	}
 	if err := rows.Err(); err != nil {
@@ -220,8 +221,8 @@ func (s *SQLiteStore) UpdateTask(task *models.Task) error {
 	if !task.UpdatedAt.IsZero() {
 		updated = formatTime(task.UpdatedAt)
 	}
-	query := `UPDATE tasks SET project_id = ?, area_id = ?, heading_id = ?, parent_task_id = ?, title = ?, description = ?, status = ?, priority = ?, when_kind = ?, when_date = ?, deadline = ?, evening = ?, recurring = ?, sort_key = ?, updated_at = COALESCE(?, CURRENT_TIMESTAMP) WHERE id = ?`
-	_, err := s.q.Exec(query, task.ProjectID, task.AreaID, task.HeadingID, task.ParentID, task.Title, task.Description, task.Status, task.Priority, whenKindOrDefault(task.When), nullIfEmpty(task.When.Date), nullIfEmpty(task.Deadline), task.Evening, task.Recurring, nullIfEmpty(task.SortKey), updated, task.ID)
+	query := `UPDATE tasks SET project_id = ?, area_id = ?, heading_id = ?, parent_task_id = ?, title = ?, description = ?, status = ?, priority = ?, when_kind = ?, when_date = ?, deadline = ?, evening = ?, repeater_id = ?, occurrence_date = ?, sort_key = ?, updated_at = COALESCE(?, CURRENT_TIMESTAMP) WHERE id = ?`
+	_, err := s.q.Exec(query, task.ProjectID, task.AreaID, task.HeadingID, task.ParentID, task.Title, task.Description, task.Status, task.Priority, whenKindOrDefault(task.When), nullIfEmpty(task.When.Date), nullIfEmpty(task.Deadline), task.Evening, task.RepeaterID, nullIfEmpty(task.OccurrenceDate), nullIfEmpty(task.SortKey), updated, task.ID)
 	if err != nil {
 		return fmt.Errorf("could not update task: %w", err)
 	}

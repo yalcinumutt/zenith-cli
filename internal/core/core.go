@@ -40,6 +40,7 @@ type Core struct {
 	Habits    *HabitService
 	Tags      *TagService
 	Lists     *ListService
+	Repeaters *RepeaterService
 
 	store storage.Store
 	bus   *bus
@@ -65,6 +66,7 @@ func New(store storage.Store, clock Clock, notifier Notifier) *Core {
 		Habits:    &HabitService{store: store, bus: b},
 		Tags:      &TagService{store: store, bus: b},
 		Lists:     &ListService{store: store, clock: clock},
+		Repeaters: &RepeaterService{store: store, tasks: tasks},
 		store:     store,
 		bus:       b,
 	}

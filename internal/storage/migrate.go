@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/yalcinumutt/zenith-cli/internal/models"
@@ -45,7 +46,7 @@ func migrate(db *sql.DB) error {
 	}
 
 	// 5. Add recurring to tasks if it doesn't exist
-	if !columnExists(db, "tasks", "recurring") {
+	if !columnExists(db, "tasks", "recurring") && !columnExists(db, "tasks", "repeater_id") {
 		_, err := db.Exec("ALTER TABLE tasks ADD COLUMN recurring TEXT DEFAULT 'none'")
 		if err != nil {
 			return fmt.Errorf("failed to add recurring column: %w", err)
@@ -107,13 +108,18 @@ func migrate(db *sql.DB) error {
 	}
 
 	// 13. Manual ordering by fractional index (ADR 0007).
-	return migrateSortKeys(db)
+	if err := migrateSortKeys(db); err != nil {
+		return err
+	}
+
+	// 14. Repeaters replace the single-row recurring column (ADR 0006).
+	return migrateRepeaters(db)
 }
 
 // uuidTables are the tables with an integer `id` handle. The task_tags join
 // table has no id of its own; sync identifies its rows by (task uuid, tag uuid).
 var uuidTables = []string{
-	"areas", "headings", "projects", "tasks", "tags", "task_time_logs",
+	"areas", "headings", "repeaters", "projects", "tasks", "tags", "task_time_logs",
 	"habits", "habit_logs", "scheduled_timers", "task_history",
 }
 
@@ -442,4 +448,99 @@ func migrateSortKeys(db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+// migrateRepeaters turns every legacy daily/weekly/monthly task into a Repeater
+// with the equivalent rule, links the task as its current occurrence, and drops
+// the recurring column. The anchor day is the task's scheduled day, else its
+// deadline, else the day it was created. Idempotent: it does nothing once the
+// column is gone.
+func migrateRepeaters(db *sql.DB) error {
+	if !columnExists(db, "tasks", "id") {
+		return nil
+	}
+	for _, c := range []struct{ column, ddl string }{{"repeater_id", "INTEGER"}, {"occurrence_date", "TEXT"}} {
+		if err := addColumn(db, "tasks", c.column, c.ddl); err != nil {
+			return err
+		}
+	}
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_repeater ON tasks(repeater_id, occurrence_date)"); err != nil {
+		return err
+	}
+	if !columnExists(db, "tasks", "recurring") || !columnExists(db, "tasks", "created_at") {
+		return nil // nothing to convert (or a partial table with no data to read)
+	}
+	rows, err := db.Query(`SELECT id, recurring, when_date, deadline, created_at, title, description, project_id, area_id, heading_id, priority, evening
+		FROM tasks WHERE recurring IN ('daily', 'weekly', 'monthly')`)
+	if err != nil {
+		return err
+	}
+	type legacy struct {
+		id                  int64
+		recurring           string
+		whenDate, deadline  sql.NullString
+		created             any
+		title, desc         sql.NullString
+		project, area, head sql.NullInt64
+		priority            int
+		evening             sql.NullBool
+	}
+	var all []legacy
+	for rows.Next() {
+		var l legacy
+		if err := rows.Scan(&l.id, &l.recurring, &l.whenDate, &l.deadline, &l.created, &l.title, &l.desc, &l.project, &l.area, &l.head, &l.priority, &l.evening); err != nil {
+			rows.Close()
+			return err
+		}
+		all = append(all, l)
+	}
+	rows.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, l := range all {
+		anchor := l.whenDate.String
+		if anchor == "" {
+			anchor = l.deadline.String
+		}
+		if anchor == "" {
+			anchor = legacyDate(l.created)
+		}
+		day, err := time.Parse(models.DateLayout, anchor)
+		if err != nil {
+			day = time.Now()
+			anchor = day.Format(models.DateLayout)
+		}
+		kind, weekdays, monthDay := "days", "", 0
+		switch l.recurring {
+		case "weekly":
+			kind, weekdays = "weeks", strconv.Itoa(int(day.Weekday()))
+		case "monthly":
+			kind, monthDay = "months", day.Day()
+		}
+		res, err := tx.Exec(`INSERT INTO repeaters (uuid, kind, interval, weekdays, month_day, title, description, project_id, area_id, heading_id, priority, evening)
+			VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			newUUID(), kind, weekdays, monthDay, l.title.String, l.desc.String, nullInt(l.project), nullInt(l.area), nullInt(l.head), l.priority, l.evening.Bool)
+		if err != nil {
+			return err
+		}
+		rid, _ := res.LastInsertId()
+		if _, err := tx.Exec("UPDATE tasks SET repeater_id = ?, occurrence_date = ? WHERE id = ?", rid, anchor, l.id); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec("ALTER TABLE tasks DROP COLUMN recurring"); err != nil {
+		return fmt.Errorf("failed to drop tasks.recurring: %w", err)
+	}
+	return tx.Commit()
+}
+
+func nullInt(v sql.NullInt64) any {
+	if !v.Valid {
+		return nil
+	}
+	return v.Int64
 }

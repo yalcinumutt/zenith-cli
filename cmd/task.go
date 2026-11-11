@@ -35,7 +35,6 @@ var taskAddCmd = &cobra.Command{
 		title := strings.Join(args, " ")
 		in := core.AddTaskInput{
 			Title:     title,
-			Recurring: recurring,
 			Priority:  models.PriorityMedium,
 		}
 
@@ -60,6 +59,17 @@ var taskAddCmd = &cobra.Command{
 			in.When = w
 		}
 		in.Deadline = dueStr
+		switch strings.ToLower(recurring) {
+		case "", "none":
+		case "daily":
+			in.Repeat = &models.RepeatRule{Kind: models.RepeatDays, Interval: 1}
+		case "weekly":
+			in.Repeat = &models.RepeatRule{Kind: models.RepeatWeeks, Interval: 1}
+		case "monthly":
+			in.Repeat = &models.RepeatRule{Kind: models.RepeatMonths, Interval: 1}
+		default:
+			return fmt.Errorf("invalid --recurring %q (use daily, weekly, monthly or none; see 'task repeat' for custom rules)", recurring)
+		}
 		in.Evening = eveningFlag
 
 		if priorityStr != "" {
@@ -339,6 +349,66 @@ var taskReorderCmd = &cobra.Command{
 	},
 }
 
+var (
+	repeatDays, repeatWeeks, repeatMonths int
+	repeatOn                              string
+	repeatDay                             int
+)
+
+var taskRepeatCmd = &cobra.Command{
+	Use:   "repeat [id] [none]",
+	Short: "Show, set or remove a task's repeat rule",
+	Long: `With no flags, shows the rule. Set one with --days N, --weeks N [--on mon,wed] or --months N [--day D].
+Use 'task repeat <id> none' to stop repeating.`,
+	Args: cobra.RangeArgs(1, 2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := parseID("task ID", args[0])
+		if err != nil {
+			return err
+		}
+		if len(args) == 2 {
+			if args[1] != "none" {
+				return fmt.Errorf("unexpected argument %q (did you mean 'none'?)", args[1])
+			}
+			if err := app.Repeaters.Remove(id); err != nil {
+				return err
+			}
+			fmt.Printf("Task %d no longer repeats.\n", id)
+			return nil
+		}
+		var rule models.RepeatRule
+		switch {
+		case repeatDays > 0:
+			rule = models.RepeatRule{Kind: models.RepeatDays, Interval: repeatDays}
+		case repeatWeeks > 0:
+			days, err := core.ParseWeekdays(repeatOn)
+			if err != nil {
+				return err
+			}
+			rule = models.RepeatRule{Kind: models.RepeatWeeks, Interval: repeatWeeks, Weekdays: days}
+		case repeatMonths > 0:
+			rule = models.RepeatRule{Kind: models.RepeatMonths, Interval: repeatMonths, MonthDay: repeatDay}
+		default:
+			r, err := app.Repeaters.ForTask(id)
+			if err != nil {
+				return err
+			}
+			if r == nil {
+				fmt.Printf("Task %d does not repeat.\n", id)
+				return nil
+			}
+			fmt.Printf("Task %d: %s\n", id, r.Rule)
+			return nil
+		}
+		if err := app.Repeaters.Set(id, rule); err != nil {
+			return err
+		}
+		r, _ := app.Repeaters.ForTask(id)
+		fmt.Printf("Task %d: %s\n", id, r.Rule)
+		return nil
+	},
+}
+
 var taskAreaCmd = &cobra.Command{
 	Use:   "area [id] [areaID|none]",
 	Short: "File a task directly in an area, or unfile it with 'none'",
@@ -553,6 +623,11 @@ func init() {
 	taskReorderCmd.Flags().StringVar(&reorderHeading, "heading", "", "Move under this heading ID, or 'none'")
 	taskReorderCmd.Flags().BoolVar(&reorderEvening, "evening", false, "Move to This Evening")
 	taskReorderCmd.Flags().BoolVar(&reorderDay, "day", false, "Move back to the day section")
+	taskRepeatCmd.Flags().IntVar(&repeatDays, "days", 0, "Repeat every N days")
+	taskRepeatCmd.Flags().IntVar(&repeatWeeks, "weeks", 0, "Repeat every N weeks")
+	taskRepeatCmd.Flags().StringVar(&repeatOn, "on", "", "With --weeks: weekdays, e.g. mon,wed,fri")
+	taskRepeatCmd.Flags().IntVar(&repeatMonths, "months", 0, "Repeat every N months")
+	taskRepeatCmd.Flags().IntVar(&repeatDay, "day", 0, "With --months: day of the month (default: the task's day)")
 	taskTagCmd.Flags().StringVarP(&tagColor, "color", "c", "", "Color for the tag")
 
 	rootCmd.AddCommand(taskCmd)
@@ -563,6 +638,7 @@ func init() {
 	taskCmd.AddCommand(taskReopenCmd)
 	taskCmd.AddCommand(taskParentCmd)
 	taskCmd.AddCommand(taskAreaCmd)
+	taskCmd.AddCommand(taskRepeatCmd)
 	taskCmd.AddCommand(taskReorderCmd)
 	taskCmd.AddCommand(taskWhenCmd)
 	taskCmd.AddCommand(taskDeadlineCmd)
