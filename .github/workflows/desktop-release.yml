@@ -54,8 +54,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-14, label: macos-arm64, goos: darwin, arch: arm64 }
-          - { os: macos-14, label: macos-amd64, goos: darwin, arch: amd64 }
+          - { os: macos-latest, label: macos-arm64, goos: darwin, arch: arm64 }
+          - { os: macos-latest, label: macos-amd64, goos: darwin, arch: amd64 }
           - { os: windows-latest, label: windows-amd64, goos: windows, arch: amd64 }
           - { os: ubuntu-latest, label: linux-amd64, goos: linux, arch: amd64 }
     defaults:
@@ -80,6 +80,7 @@ jobs:
 
       - name: Linux packaging dependencies
         if: matrix.goos == 'linux'
+        timeout-minutes: 10
         env:
           DEBIAN_FRONTEND: noninteractive
           NEEDRESTART_MODE: a
@@ -88,7 +89,9 @@ jobs:
           sudo -E apt-get install -y --no-install-recommends build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev libwayland-dev rpm libfuse2t64 || sudo -E apt-get install -y --no-install-recommends libfuse2
       - name: Windows installer tooling
         if: matrix.goos == 'windows'
-        run: choco install nsis -y --no-progress
+        run: |
+          choco install nsis -y --no-progress
+          echo 'C:\Program Files (x86)\NSIS' >> "$GITHUB_PATH"
 
       - name: Install Wails CLI
         run: |

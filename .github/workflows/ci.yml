@@ -62,12 +62,13 @@ jobs:
           cache-dependency-path: desktop/frontend/pnpm-lock.yaml
       - name: Linux build dependencies
         if: runner.os == 'Linux'
+        timeout-minutes: 10
         env:
           DEBIAN_FRONTEND: noninteractive
           NEEDRESTART_MODE: a
         run: |
-          sudo -E apt-get update
-          sudo -E apt-get install -y --no-install-recommends build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev libwayland-dev
+          sudo -E apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update
+          sudo -E apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y --no-install-recommends build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev libwayland-dev
       - name: Install Wails CLI
         run: |
           go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
