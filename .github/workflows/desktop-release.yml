@@ -7,6 +7,13 @@ name: Desktop release
 on:
   push:
     tags: ["desktop-v*"]
+  # A dry run builds and packages everything but publishes nothing: the assets are
+  # attached to the workflow run as artifacts. Use it to check the pipeline.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to stamp (no release is created)"
+        default: "0.0.0-dryrun"
 
 permissions:
   contents: write
@@ -23,8 +30,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: v
-        run: echo "version=${GITHUB_REF_NAME#desktop-v}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "version=${GITHUB_REF_NAME#desktop-v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
       - name: Create the release (idempotent)
+        if: github.ref_type == 'tag'
         run: |
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
           gh release create "$GITHUB_REF_NAME" \
@@ -35,6 +48,7 @@ jobs:
   build:
     name: build (${{ matrix.label }})
     needs: release
+    timeout-minutes: 45
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -66,9 +80,12 @@ jobs:
 
       - name: Linux packaging dependencies
         if: matrix.goos == 'linux'
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: a
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev libwayland-dev rpm fuse libfuse2
+          sudo -E apt-get update
+          sudo -E apt-get install -y --no-install-recommends build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev libwayland-dev rpm libfuse2t64 || sudo -E apt-get install -y --no-install-recommends libfuse2
       - name: Windows installer tooling
         if: matrix.goos == 'windows'
         run: choco install nsis -y --no-progress
@@ -137,4 +154,12 @@ jobs:
           ls -la ../assets
 
       - name: Upload to the release
+        if: github.ref_type == 'tag'
         run: gh release upload "$GITHUB_REF_NAME" assets/* --clobber
+
+      - name: Keep the assets (dry run)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: zenith-desktop-${{ matrix.label }}
+          path: assets/*
