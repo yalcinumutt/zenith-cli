@@ -121,34 +121,13 @@ func NewSQLiteStoreAtPath(dbPath string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("could not run migrations: %w", err)
 	}
 
-	if err := ensureDefaultProject(db); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("could not ensure default project: %w", err)
-	}
-
 	return &SQLiteStore{db: db, q: db}, nil
-}
-
-func ensureDefaultProject(db *sql.DB) error {
-	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM projects").Scan(&count)
-	if err != nil {
-		return err
-	}
-
-	if count == 0 {
-		_, err := db.Exec("INSERT INTO projects (uuid, name, description) VALUES (?, ?, ?)", newUUID(), "Anytime", "Default project for tasks")
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (s *SQLiteStore) AddTask(task *models.Task) error {
 	task.UUID = newUUID()
-	query := `INSERT INTO tasks (uuid, project_id, parent_task_id, title, description, status, priority, due_date, planned_date, recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	res, err := s.q.Exec(query, task.UUID, task.ProjectID, task.ParentID, task.Title, task.Description, task.Status, task.Priority, task.DueDate, task.PlannedDate, task.Recurring)
+	query := `INSERT INTO tasks (uuid, project_id, area_id, heading_id, parent_task_id, title, description, status, priority, due_date, planned_date, recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	res, err := s.q.Exec(query, task.UUID, task.ProjectID, task.AreaID, task.HeadingID, task.ParentID, task.Title, task.Description, task.Status, task.Priority, task.DueDate, task.PlannedDate, task.Recurring)
 	if err != nil {
 		return fmt.Errorf("could not insert task: %w", err)
 	}
@@ -164,7 +143,7 @@ func (s *SQLiteStore) AddTask(task *models.Task) error {
 
 const taskSelect = `
 		SELECT 
-			t.id, t.uuid, t.project_id, t.parent_task_id, t.title, t.description, t.status, t.priority, t.due_date, t.planned_date, t.recurring, t.created_at, t.updated_at,
+			t.id, t.uuid, t.project_id, t.area_id, t.heading_id, t.parent_task_id, t.title, t.description, t.status, t.priority, t.due_date, t.planned_date, t.recurring, t.created_at, t.updated_at,
 			EXISTS(SELECT 1 FROM task_time_logs WHERE task_id = t.id AND end_time IS NULL) as is_running,
 			COALESCE((SELECT SUM(strftime('%s', COALESCE(end_time, CURRENT_TIMESTAMP)) - strftime('%s', start_time)) FROM task_time_logs WHERE task_id = t.id), 0) as total_time
 		FROM tasks t`
@@ -178,7 +157,7 @@ func (s *SQLiteStore) queryTasks(where string, args ...any) ([]models.Task, erro
 	var tasks []models.Task
 	for rows.Next() {
 		var t models.Task
-		err := rows.Scan(&t.ID, &t.UUID, &t.ProjectID, &t.ParentID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.DueDate, &t.PlannedDate, &t.Recurring, &t.CreatedAt, &t.UpdatedAt, &t.IsRunning, &t.TotalTime)
+		err := rows.Scan(&t.ID, &t.UUID, &t.ProjectID, &t.AreaID, &t.HeadingID, &t.ParentID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.DueDate, &t.PlannedDate, &t.Recurring, &t.CreatedAt, &t.UpdatedAt, &t.IsRunning, &t.TotalTime)
 		if err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("could not scan task: %w", err)
@@ -230,15 +209,22 @@ func (s *SQLiteStore) UpdateTask(task *models.Task) error {
 	if !task.UpdatedAt.IsZero() {
 		updated = formatTime(task.UpdatedAt)
 	}
-	query := `UPDATE tasks SET project_id = ?, parent_task_id = ?, title = ?, description = ?, status = ?, priority = ?, due_date = ?, planned_date = ?, recurring = ?, updated_at = COALESCE(?, CURRENT_TIMESTAMP) WHERE id = ?`
-	_, err := s.q.Exec(query, task.ProjectID, task.ParentID, task.Title, task.Description, task.Status, task.Priority, task.DueDate, task.PlannedDate, task.Recurring, updated, task.ID)
+	query := `UPDATE tasks SET project_id = ?, area_id = ?, heading_id = ?, parent_task_id = ?, title = ?, description = ?, status = ?, priority = ?, due_date = ?, planned_date = ?, recurring = ?, updated_at = COALESCE(?, CURRENT_TIMESTAMP) WHERE id = ?`
+	_, err := s.q.Exec(query, task.ProjectID, task.AreaID, task.HeadingID, task.ParentID, task.Title, task.Description, task.Status, task.Priority, task.DueDate, task.PlannedDate, task.Recurring, updated, task.ID)
 	if err != nil {
 		return fmt.Errorf("could not update task: %w", err)
 	}
 	return nil
 }
 
+// DeleteTask removes the task and the rows that belong to it, so nothing is
+// left orphaned (foreign keys are not enforced). Subtasks are the core's job.
 func (s *SQLiteStore) DeleteTask(id int64) error {
+	for _, table := range []string{"task_tags", "task_time_logs", "task_history", "scheduled_timers"} {
+		if _, err := s.q.Exec("DELETE FROM "+table+" WHERE task_id = ?", id); err != nil {
+			return err
+		}
+	}
 	_, err := s.q.Exec("DELETE FROM tasks WHERE id = ?", id)
 	return err
 }
@@ -296,7 +282,7 @@ func (s *SQLiteStore) LogHabit(habitID int64) error {
 
 func (s *SQLiteStore) AddProject(project *models.Project) error {
 	project.UUID = newUUID()
-	res, err := s.q.Exec("INSERT INTO projects (uuid, name, description) VALUES (?, ?, ?)", project.UUID, project.Name, project.Description)
+	res, err := s.q.Exec("INSERT INTO projects (uuid, area_id, name, description, status) VALUES (?, ?, ?, ?, ?)", project.UUID, project.AreaID, project.Name, project.Description, project.Status)
 	if err != nil {
 		return err
 	}
@@ -309,7 +295,7 @@ func (s *SQLiteStore) AddProject(project *models.Project) error {
 }
 
 func (s *SQLiteStore) GetProjects() ([]models.Project, error) {
-	rows, err := s.q.Query("SELECT id, uuid, name, description, created_at, updated_at FROM projects")
+	rows, err := s.q.Query("SELECT id, uuid, area_id, name, description, status, created_at, updated_at FROM projects ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +304,7 @@ func (s *SQLiteStore) GetProjects() ([]models.Project, error) {
 	var projects []models.Project
 	for rows.Next() {
 		var p models.Project
-		if err := rows.Scan(&p.ID, &p.UUID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.UUID, &p.AreaID, &p.Name, &p.Description, &p.Status, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
 		projects = append(projects, p)

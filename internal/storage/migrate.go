@@ -81,13 +81,18 @@ func migrate(db *sql.DB) error {
 	}
 
 	// 9. Status model and Subtasks (ADR 0005).
-	return migrateStatusAndSubtasks(db)
+	if err := migrateStatusAndSubtasks(db); err != nil {
+		return err
+	}
+
+	// 10. Area > Project > Heading > Task, and the retired Anytime project.
+	return migrateHierarchy(db)
 }
 
 // uuidTables are the tables with an integer `id` handle. The task_tags join
 // table has no id of its own; sync identifies its rows by (task uuid, tag uuid).
 var uuidTables = []string{
-	"projects", "tasks", "tags", "task_time_logs",
+	"areas", "headings", "projects", "tasks", "tags", "task_time_logs",
 	"habits", "habit_logs", "scheduled_timers", "task_history",
 }
 
@@ -174,6 +179,53 @@ func migrateStatusAndSubtasks(db *sql.DB) error {
 		WHERE status IS NULL OR status NOT IN ('open', 'completed', 'cancelled')`)
 	if err != nil {
 		return fmt.Errorf("failed to migrate task statuses: %w", err)
+	}
+	return nil
+}
+
+// addColumn adds a column once; a concurrent process may win the race.
+func addColumn(db *sql.DB, table, column, ddl string) error {
+	if columnExists(db, table, column) {
+		return nil
+	}
+	_, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, ddl))
+	if err != nil && !columnExists(db, table, column) {
+		return fmt.Errorf("failed to add %s.%s: %w", table, column, err)
+	}
+	return nil
+}
+
+// migrateHierarchy adds the container columns for Area > Project > Heading >
+// Task and retires the seeded 'Anytime' project: its tasks become project-less
+// and the row is removed. Only the exact seed (name and description) is
+// touched, so a user's own project is never deleted. Idempotent.
+func migrateHierarchy(db *sql.DB) error {
+	if !columnExists(db, "tasks", "id") || !columnExists(db, "projects", "id") {
+		return nil // partial legacy database
+	}
+	for _, c := range []struct{ table, column, ddl string }{
+		{"projects", "area_id", "INTEGER REFERENCES areas(id) ON DELETE SET NULL"},
+		{"projects", "status", "TEXT DEFAULT 'open'"},
+		{"tasks", "area_id", "INTEGER REFERENCES areas(id) ON DELETE SET NULL"},
+		{"tasks", "heading_id", "INTEGER REFERENCES headings(id) ON DELETE CASCADE"},
+	} {
+		if err := addColumn(db, c.table, c.column, c.ddl); err != nil {
+			return err
+		}
+	}
+	for _, stmt := range []string{
+		"CREATE INDEX IF NOT EXISTS idx_projects_area ON projects(area_id)",
+		"CREATE INDEX IF NOT EXISTS idx_tasks_area ON tasks(area_id)",
+		"CREATE INDEX IF NOT EXISTS idx_tasks_heading ON tasks(heading_id)",
+		"CREATE INDEX IF NOT EXISTS idx_headings_project ON headings(project_id)",
+		"UPDATE projects SET status = 'open' WHERE status IS NULL OR status = ''",
+		`UPDATE tasks SET project_id = NULL WHERE project_id IN
+			(SELECT id FROM projects WHERE name = 'Anytime' AND description = 'Default project for tasks')`,
+		"DELETE FROM projects WHERE name = 'Anytime' AND description = 'Default project for tasks'",
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("hierarchy migration failed on %q: %w", stmt, err)
+		}
 	}
 	return nil
 }

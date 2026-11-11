@@ -61,3 +61,24 @@ type invalidError string
 
 func (e invalidError) Error() string        { return string(e) }
 func (e invalidError) Is(target error) bool { return target == ErrInvalid }
+
+// ErrOpenTasks matches *OpenTasksError: a project cannot be completed while
+// it still has open tasks.
+var ErrOpenTasks = errors.New("project has open tasks")
+
+// OpenTasksError reports how many open tasks block completing a container.
+type OpenTasksError struct {
+	Entity string
+	ID     int64
+	Count  int
+}
+
+func (e *OpenTasksError) Error() string {
+	noun := "tasks"
+	if e.Count == 1 {
+		noun = "task"
+	}
+	return fmt.Sprintf("%s %d has %d open %s; complete or cancel them first", e.Entity, e.ID, e.Count, noun)
+}
+
+func (e *OpenTasksError) Is(target error) bool { return target == ErrOpenTasks }

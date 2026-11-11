@@ -154,8 +154,8 @@ func TestLegacyRowsAndIntegerHandlesSurvive(t *testing.T) {
 	}
 
 	projects, _ := c.Projects.List()
-	if len(projects) != 2 || projects[0].ID != 1 || projects[1].ID != 3 {
-		t.Errorf("projects = %+v (default project must not be duplicated)", projects)
+	if len(projects) != 1 || projects[0].ID != 3 || projects[0].Name != "Website" {
+		t.Errorf("projects = %+v (Anytime must be gone, project 3 keeps its handle)", projects)
 	}
 	habits, _ := c.Habits.List()
 	if len(habits) != 2 || habits[1].ID != 3 {
@@ -184,7 +184,7 @@ func TestNewRowsGetUUIDsThroughTheCore(t *testing.T) {
 	c := openAt(t, path)
 
 	task, _ := c.Tasks.Add(core.AddTaskInput{Title: "fresh"})
-	project, _ := c.Projects.Add("Fresh project")
+	project, _ := c.Projects.Add("Fresh project", nil)
 	habit, _ := c.Habits.Add("Fresh habit")
 	for name, u := range map[string]string{"task": task.UUID, "project": project.UUID, "habit": habit.UUID} {
 		if !uuidV4.MatchString(u) {

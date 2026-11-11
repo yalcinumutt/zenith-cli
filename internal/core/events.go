@@ -44,6 +44,8 @@ const (
 	ListTasks    = "tasks"
 	ListProjects = "projects"
 	ListHabits   = "habits"
+	ListAreas    = "areas"
+	ListHeadings = "headings"
 )
 
 // TaskChanged is published after a task mutation made through this core.

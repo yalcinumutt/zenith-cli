@@ -5,13 +5,14 @@ import (
 	"testing"
 
 	"github.com/yalcinumutt/zenith-cli/internal/core"
+	"github.com/yalcinumutt/zenith-cli/internal/models"
 )
 
 func TestProjects(t *testing.T) {
 	c, _ := newCore(t)
 	events := collect(c)
 
-	p, err := c.Projects.Add("Website")
+	p, err := c.Projects.Add("Website", nil)
 	if err != nil || p.ID == 0 || p.Name != "Website" {
 		t.Fatalf("Add = %+v, %v", p, err)
 	}
@@ -19,13 +20,9 @@ func TestProjects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The default "Anytime" project plus the new one.
-	names := map[string]bool{}
-	for _, pr := range list {
-		names[pr.Name] = true
-	}
-	if !names["Website"] || !names["Anytime"] {
-		t.Errorf("projects = %v", names)
+	// A fresh database has no seeded "Anytime" project any more.
+	if len(list) != 1 || list[0].Name != "Website" || list[0].Status != models.StatusOpen {
+		t.Errorf("projects = %+v", list)
 	}
 	got := events()
 	if len(got) != 1 {
@@ -88,7 +85,7 @@ func TestSearchAndOverview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(o.Tasks) != 2 || len(o.Habits) != 2 || len(o.Projects) < 1 {
+	if len(o.Tasks) != 2 || len(o.Habits) != 2 || len(o.Projects) != 0 {
 		t.Errorf("overview = %d tasks, %d habits, %d projects", len(o.Tasks), len(o.Habits), len(o.Projects))
 	}
 }

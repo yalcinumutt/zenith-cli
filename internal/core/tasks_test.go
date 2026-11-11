@@ -185,15 +185,16 @@ func TestEditsRecordEditedHistory(t *testing.T) {
 	c, clock := newCore(t)
 	task, _ := c.Tasks.Add(core.AddTaskInput{Title: "plan me"})
 	day := clock.now.Truncate(24 * time.Hour)
+	proj, _ := c.Projects.Add("P", nil)
 
 	if err := c.Tasks.Plan(task.ID, day); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.Tasks.MoveToProject(task.ID, 1); err != nil {
+	if err := c.Tasks.MoveToProject(task.ID, proj.ID); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := c.Tasks.Get(task.ID)
-	if got.PlannedDate == nil || got.ProjectID == nil || *got.ProjectID != 1 {
+	if got.PlannedDate == nil || got.ProjectID == nil || *got.ProjectID != proj.ID {
 		t.Errorf("got %+v", got)
 	}
 	if a := actions(t, c, task.ID); !eq(a, []string{"created", "edited", "edited"}) {
@@ -240,6 +241,8 @@ func TestEveryMutationPublishesAnEvent(t *testing.T) {
 	c, _ := newCore(t)
 	events := collect(c)
 
+	proj, _ := c.Projects.Add("P", nil)
+	_ = events()
 	task, _ := c.Tasks.Add(core.AddTaskInput{Title: "evented"})
 	if got := events(); len(got) != 2 {
 		t.Fatalf("add: got %d events, want 2", len(got))
@@ -255,7 +258,7 @@ func TestEveryMutationPublishesAnEvent(t *testing.T) {
 		{"stop", func() error { return c.Tasks.StopTimer(task.ID) }, core.ChangeTimer},
 		{"tag", func() error { return c.Tasks.Tag(task.ID, "t", "") }, core.ChangeTagged},
 		{"plan", func() error { return c.Tasks.Plan(task.ID, time.Now()) }, core.ChangeUpdated},
-		{"move", func() error { return c.Tasks.MoveToProject(task.ID, 1) }, core.ChangeUpdated},
+		{"move", func() error { return c.Tasks.MoveToProject(task.ID, proj.ID) }, core.ChangeUpdated},
 		{"complete", func() error { return c.Tasks.Complete(task.ID) }, core.ChangeStatus},
 		{"reopen", func() error { return c.Tasks.Reopen(task.ID) }, core.ChangeStatus},
 		{"delete", func() error { return c.Tasks.Delete(task.ID) }, core.ChangeDeleted},

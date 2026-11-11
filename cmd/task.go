@@ -20,6 +20,8 @@ var recurring string
 var tagColor string
 var projectID int64
 var parentID int64
+var areaFlag int64
+var headingFlag int64
 var dueStr string
 var priorityStr string
 
@@ -40,6 +42,12 @@ var taskAddCmd = &cobra.Command{
 		}
 		if parentID != 0 {
 			in.ParentID = &parentID
+		}
+		if areaFlag != 0 {
+			in.AreaID = &areaFlag
+		}
+		if headingFlag != 0 {
+			in.HeadingID = &headingFlag
 		}
 
 		if dueStr != "" {
@@ -232,6 +240,53 @@ var taskParentCmd = &cobra.Command{
 	},
 }
 
+var taskAreaCmd = &cobra.Command{
+	Use:   "area [id] [areaID|none]",
+	Short: "File a task directly in an area, or unfile it with 'none'",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := parseID("task ID", args[0])
+		if err != nil {
+			return err
+		}
+		areaID, err := parseOptionalID("area ID", args[1])
+		if err != nil {
+			return err
+		}
+		if areaID == nil {
+			err = app.Tasks.Unfile(id)
+		} else {
+			err = app.Tasks.FileInArea(id, *areaID)
+		}
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Task %d filed.\n", id)
+		return nil
+	},
+}
+
+var taskHeadingCmd = &cobra.Command{
+	Use:   "heading [id] [headingID|none]",
+	Short: "Put a task under a heading, or take it out with 'none'",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := parseID("task ID", args[0])
+		if err != nil {
+			return err
+		}
+		headingID, err := parseOptionalID("heading ID", args[1])
+		if err != nil {
+			return err
+		}
+		if err := app.Tasks.SetHeading(id, headingID); err != nil {
+			return err
+		}
+		fmt.Printf("Task %d updated.\n", id)
+		return nil
+	},
+}
+
 var taskStartCmd = &cobra.Command{
 	Use:   "start [id]",
 	Short: "Start timer for a task",
@@ -367,6 +422,8 @@ var taskHistoryCmd = &cobra.Command{
 func init() {
 	taskAddCmd.Flags().StringVarP(&recurring, "recurring", "r", "none", "Recurrence pattern (daily, weekly, monthly)")
 	taskAddCmd.Flags().Int64VarP(&projectID, "project", "p", 0, "Project ID")
+	taskAddCmd.Flags().Int64Var(&areaFlag, "area", 0, "Area ID (for a task outside any project)")
+	taskAddCmd.Flags().Int64Var(&headingFlag, "heading", 0, "Heading ID (files the task in the heading's project)")
 	taskAddCmd.Flags().Int64Var(&parentID, "parent", 0, "Parent task ID (creates a subtask)")
 	taskAddCmd.Flags().StringVarP(&dueStr, "due", "d", "", "Due date (YYYY-MM-DD)")
 	taskAddCmd.Flags().StringVarP(&priorityStr, "priority", "P", "medium", "Priority (low, medium, high, critical)")
@@ -379,6 +436,8 @@ func init() {
 	taskCmd.AddCommand(taskCancelCmd)
 	taskCmd.AddCommand(taskReopenCmd)
 	taskCmd.AddCommand(taskParentCmd)
+	taskCmd.AddCommand(taskAreaCmd)
+	taskCmd.AddCommand(taskHeadingCmd)
 	taskCmd.AddCommand(taskDeleteCmd)
 	taskCmd.AddCommand(taskStartCmd)
 	taskCmd.AddCommand(taskStopCmd)

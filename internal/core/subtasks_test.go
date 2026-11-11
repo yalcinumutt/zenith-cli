@@ -110,7 +110,8 @@ func TestAddingASubtaskReopensACompletedParent(t *testing.T) {
 
 func TestSubtaskInheritsProjectAndIsAFullTask(t *testing.T) {
 	c, _ := newCore(t)
-	proj := int64(1)
+	project, _ := c.Projects.Add("P", nil)
+	proj := project.ID
 	parent, _ := c.Tasks.Add(core.AddTaskInput{Title: "p", ProjectID: &proj})
 	child := addSub(t, c, "child", parent.ID)
 	got, _ := c.Tasks.Get(child.ID)

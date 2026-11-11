@@ -21,7 +21,9 @@ type TaskService struct {
 // AddTaskInput is what a front-end supplies to create a task.
 type AddTaskInput struct {
 	Title     string
-	ProjectID *int64
+	ProjectID *int64 // a task is filed in a project or an area, never both
+	AreaID    *int64
+	HeadingID *int64 // implies the heading's project
 	ParentID  *int64 // makes the new task a Subtask of this task
 	DueDate   *time.Time
 	Priority  models.Priority
@@ -57,6 +59,8 @@ func (s *TaskService) Add(in AddTaskInput) (*models.Task, error) {
 		Status:    models.StatusOpen,
 		Priority:  in.Priority,
 		ProjectID: in.ProjectID,
+		AreaID:    in.AreaID,
+		HeadingID: in.HeadingID,
 		ParentID:  in.ParentID,
 		DueDate:   in.DueDate,
 		Recurring: in.Recurring,
@@ -70,7 +74,7 @@ func (s *TaskService) Add(in AddTaskInput) (*models.Task, error) {
 			if parent.Status == models.StatusCancelled {
 				return invalidError(fmt.Sprintf("task %d is cancelled; reopen it before adding subtasks", parent.ID))
 			}
-			if task.ProjectID == nil {
+			if task.ProjectID == nil && task.AreaID == nil && task.HeadingID == nil {
 				task.ProjectID = parent.ProjectID // a Subtask files with its parent unless told otherwise
 			}
 			// A new open Subtask makes a completed parent open work again.
@@ -79,6 +83,9 @@ func (s *TaskService) Add(in AddTaskInput) (*models.Task, error) {
 					return err
 				}
 			}
+		}
+		if err := s.normalizeContainer(tx, task); err != nil {
+			return err
 		}
 		if err := tx.AddTask(task); err != nil {
 			return err
@@ -124,22 +131,24 @@ func (s *TaskService) Reopen(id int64) error {
 
 // Cancel marks the task and its open Subtasks cancelled, stopping their timers.
 func (s *TaskService) Cancel(id int64) error {
-	return s.run(func(tx storage.Store, ch *changes) error {
-		t, err := s.get(tx, id)
-		if err != nil {
-			return err
-		}
-		if t.Status == models.StatusCancelled {
-			return nil
-		}
-		if err := s.cancelTree(tx, ch, t); err != nil {
-			return err
-		}
-		if t.ParentID != nil {
-			return s.completeParentIfDone(tx, ch, *t.ParentID)
-		}
+	return s.run(func(tx storage.Store, ch *changes) error { return s.cancel(tx, ch, id) })
+}
+
+func (s *TaskService) cancel(tx storage.Store, ch *changes, id int64) error {
+	t, err := s.get(tx, id)
+	if err != nil {
+		return err
+	}
+	if t.Status == models.StatusCancelled {
 		return nil
-	})
+	}
+	if err := s.cancelTree(tx, ch, t); err != nil {
+		return err
+	}
+	if t.ParentID != nil {
+		return s.completeParentIfDone(tx, ch, *t.ParentID)
+	}
+	return nil
 }
 
 // SetParent nests the task under parentID, or makes it top-level when nil. A
@@ -182,9 +191,49 @@ func (s *TaskService) SetParent(id int64, parentID *int64) error {
 	})
 }
 
-// MoveToProject assigns the task to a project.
+// MoveToProject files the task in a project. A heading from another project
+// is dropped, and a task filed in a project is no longer filed in an area.
 func (s *TaskService) MoveToProject(id, projectID int64) error {
-	return s.edit(id, func(t *models.Task) { t.ProjectID = &projectID })
+	return s.editTx(id, func(tx storage.Store, t *models.Task) error {
+		if err := requireProject(tx, projectID); err != nil {
+			return err
+		}
+		t.ProjectID, t.AreaID = &projectID, nil
+		return s.dropForeignHeading(tx, t)
+	})
+}
+
+// FileInArea files a top-level task directly in an area, outside any project.
+func (s *TaskService) FileInArea(id, areaID int64) error {
+	return s.editTx(id, func(tx storage.Store, t *models.Task) error {
+		if _, err := getArea(tx, areaID); err != nil {
+			return err
+		}
+		t.AreaID, t.ProjectID, t.HeadingID = &areaID, nil, nil
+		return nil
+	})
+}
+
+// Unfile removes the task from its area, project and heading.
+func (s *TaskService) Unfile(id int64) error {
+	return s.edit(id, func(t *models.Task) { t.AreaID, t.ProjectID, t.HeadingID = nil, nil, nil })
+}
+
+// SetHeading places the task under a heading (which also files it in that
+// heading's project), or removes it from its heading when headingID is nil.
+func (s *TaskService) SetHeading(id int64, headingID *int64) error {
+	return s.editTx(id, func(tx storage.Store, t *models.Task) error {
+		if headingID == nil {
+			t.HeadingID = nil
+			return nil
+		}
+		h, err := getHeading(tx, *headingID)
+		if err != nil {
+			return err
+		}
+		t.HeadingID, t.ProjectID, t.AreaID = headingID, &h.ProjectID, nil
+		return nil
+	})
 }
 
 // Plan sets the day the task is planned for.
@@ -326,6 +375,9 @@ func (s *TaskService) complete(tx storage.Store, ch *changes, id int64) error {
 // and at least one of them completed.
 func (s *TaskService) completeParentIfDone(tx storage.Store, ch *changes, parentID int64) error {
 	parent, err := s.get(tx, parentID)
+	if errors.Is(err, ErrNotFound) {
+		return nil // removed in the same operation
+	}
 	if err != nil {
 		return err
 	}
@@ -482,4 +534,103 @@ func sameID(a, b *int64) bool {
 		return a == nil && b == nil
 	}
 	return *a == *b
+}
+
+func requireProject(tx storage.Store, id int64) error {
+	if _, err := tx.GetProject(id); errors.Is(err, storage.ErrNotFound) {
+		return &NotFoundError{Entity: "project", ID: id}
+	} else if err != nil {
+		return err
+	}
+	return nil
+}
+
+// normalizeContainer checks a new task's container fields: every referenced
+// area, project and heading exists, a heading implies its project, and the task
+// is in a project or an area, never both.
+func (s *TaskService) normalizeContainer(tx storage.Store, t *models.Task) error {
+	if t.HeadingID != nil {
+		h, err := getHeading(tx, *t.HeadingID)
+		if err != nil {
+			return err
+		}
+		if t.ProjectID == nil {
+			t.ProjectID = &h.ProjectID
+		} else if *t.ProjectID != h.ProjectID {
+			return invalidError(fmt.Sprintf("heading %d belongs to project %d, not project %d", h.ID, h.ProjectID, *t.ProjectID))
+		}
+	}
+	if t.ProjectID != nil && t.AreaID != nil {
+		return invalidError("a task is filed in a project or an area, not both")
+	}
+	if t.ProjectID != nil {
+		if err := requireProject(tx, *t.ProjectID); err != nil {
+			return err
+		}
+	}
+	if t.AreaID != nil {
+		if _, err := getArea(tx, *t.AreaID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// dropForeignHeading clears the task's heading when it belongs to a different project.
+func (s *TaskService) dropForeignHeading(tx storage.Store, t *models.Task) error {
+	if t.HeadingID == nil {
+		return nil
+	}
+	h, err := tx.GetHeading(*t.HeadingID)
+	if errors.Is(err, storage.ErrNotFound) || (err == nil && (t.ProjectID == nil || h.ProjectID != *t.ProjectID)) {
+		t.HeadingID = nil
+		return nil
+	}
+	return err
+}
+
+// editTx is edit with access to the transaction for validation.
+func (s *TaskService) editTx(id int64, mutate func(tx storage.Store, t *models.Task) error) error {
+	return s.run(func(tx storage.Store, ch *changes) error {
+		t, err := s.get(tx, id)
+		if err != nil {
+			return err
+		}
+		var mErr error
+		if err := s.save(tx, t, func(t *models.Task) { mErr = mutate(tx, t) }); err != nil {
+			return err
+		}
+		if mErr != nil {
+			return mErr
+		}
+		ch.add(id, ChangeUpdated)
+		return nil
+	})
+}
+
+// deleteTasks removes tasks and their Subtasks. Tasks whose parent is not among
+// them are the roots; deleting a root takes its subtree, so nothing is deleted
+// twice. The parents left behind may complete, as with a single delete.
+func (s *TaskService) deleteTasks(tx storage.Store, ch *changes, tasks []models.Task) error {
+	in := map[int64]bool{}
+	for _, t := range tasks {
+		in[t.ID] = true
+	}
+	for _, t := range tasks {
+		if t.ParentID != nil && in[*t.ParentID] {
+			continue
+		}
+		if _, err := tx.GetTask(t.ID); errors.Is(err, storage.ErrNotFound) {
+			continue // already removed as part of another subtree
+		}
+		if err := s.deleteTree(tx, ch, t.ID); err != nil {
+			return err
+		}
+		if t.ParentID != nil {
+			if err := s.completeParentIfDone(tx, ch, *t.ParentID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

@@ -22,6 +22,9 @@ type Store interface {
 	GetTasks() ([]models.Task, error)
 	GetTask(id int64) (*models.Task, error) // ErrNotFound when absent
 	GetSubtasks(parentID int64) ([]models.Task, error)
+	GetTasksInProject(projectID int64) ([]models.Task, error)
+	GetTasksInHeading(headingID int64) ([]models.Task, error)
+	GetTasksInArea(areaID int64) ([]models.Task, error) // filed directly in the area
 	UpdateTask(task *models.Task) error
 	DeleteTask(id int64) error
 	OpenTimeLog(taskID int64, start time.Time) error
@@ -41,6 +44,23 @@ type Store interface {
 	// Projects
 	AddProject(project *models.Project) error
 	GetProjects() ([]models.Project, error)
+	GetProject(id int64) (*models.Project, error) // ErrNotFound when absent
+	UpdateProject(project *models.Project) error
+	DeleteProject(id int64) error
+
+	// Areas
+	AddArea(area *models.Area) error
+	GetAreas() ([]models.Area, error)
+	GetArea(id int64) (*models.Area, error) // ErrNotFound when absent
+	UpdateArea(area *models.Area) error
+	DeleteArea(id int64) error
+
+	// Headings
+	AddHeading(heading *models.Heading) error
+	GetHeadings(projectID int64) ([]models.Heading, error)
+	GetHeading(id int64) (*models.Heading, error) // ErrNotFound when absent
+	UpdateHeading(heading *models.Heading) error
+	DeleteHeading(id int64) error
 
 	// Search
 	SearchTasks(query string) ([]models.Task, error)
