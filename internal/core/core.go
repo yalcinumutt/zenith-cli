@@ -55,6 +55,10 @@ func New(store storage.Store, clock Clock, notifier Notifier) *Core {
 	if notifier == nil {
 		notifier = NopNotifier{}
 	}
+	// The store stamps rows with hybrid-logical-clock time; give it the core's clock.
+	if cs, ok := store.(interface{ SetClock(func() time.Time) }); ok {
+		cs.SetClock(clock.Now)
+	}
 	b := &bus{}
 	tasks := &TaskService{store: store, clock: clock, notifier: notifier, bus: b}
 	return &Core{

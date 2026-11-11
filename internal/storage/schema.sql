@@ -143,3 +143,21 @@ CREATE TABLE IF NOT EXISTS task_history (
 CREATE INDEX IF NOT EXISTS idx_scheduled_timers_status ON scheduled_timers(status);
 CREATE INDEX IF NOT EXISTS idx_task_history_task ON task_history(task_id);
 
+
+-- Sync groundwork (ADR 0010): per-field stamps, written with every mutation.
+CREATE TABLE IF NOT EXISTS field_versions (
+    entity TEXT NOT NULL,
+    uuid TEXT NOT NULL,
+    field TEXT NOT NULL,
+    hlc TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    PRIMARY KEY (entity, uuid, field)
+);
+
+-- Device-local: this device's id and hybrid logical clock. Never synced.
+CREATE TABLE IF NOT EXISTS sync_state (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    device_id TEXT NOT NULL,
+    hlc_ms INTEGER NOT NULL DEFAULT 0,
+    hlc_counter INTEGER NOT NULL DEFAULT 0
+);

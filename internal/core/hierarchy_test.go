@@ -251,7 +251,7 @@ func countRows(t *testing.T, path, table string) int {
 	return n
 }
 
-func TestDeletingAProjectLeavesNothingBehind(t *testing.T) {
+func TestDeletingAProjectTombstonesEverythingInIt(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "d.db")
 	c := openAt(t, path)
 	p := newProject(t, c, "Doomed", nil)
@@ -285,15 +285,35 @@ func TestDeletingAProjectLeavesNothingBehind(t *testing.T) {
 		t.Errorf("project should be gone: %v", err)
 	}
 
-	// Only the surviving task's rows remain anywhere.
-	for table, want := range map[string]int{"tasks": 1, "headings": 0, "task_tags": 0, "task_time_logs": 0, "scheduled_timers": 0} {
-		if got := countRows(t, path, table); got != want {
-			t.Errorf("%s rows = %d, want %d", table, got, want)
+	// Synced tables are never hard-deleted: the doomed rows are tombstones, and only
+	// the surviving task is live. Device-local rows (reminders, running timer) are gone.
+	live := func(table string) int { return countWhere(t, path, table, "deleted_at IS NULL") }
+	dead := func(table string) int { return countWhere(t, path, table, "deleted_at IS NOT NULL") }
+	for table, want := range map[string][2]int{"tasks": {1, 3}, "headings": {0, 1}, "task_tags": {0, 1}, "projects": {1, 1}} {
+		if live(table) != want[0] || dead(table) != want[1] {
+			t.Errorf("%s: live %d tombstoned %d, want %d / %d", table, live(table), dead(table), want[0], want[1])
 		}
 	}
-	if got := countRows(t, path, "task_history"); got != 1 { // just "created" for the kept task
-		t.Errorf("task_history rows = %d, want 1", got)
+	if got := countRows(t, path, "scheduled_timers"); got != 0 {
+		t.Errorf("scheduled_timers rows = %d, want 0 (device-local, removed with the task)", got)
 	}
+	if got := countWhere(t, path, "task_time_logs", "end_time IS NULL"); got != 0 {
+		t.Errorf("running time logs = %d, want 0", got)
+	}
+}
+
+func countWhere(t *testing.T, path, table, where string) int {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var n int
+	if err := db.QueryRow("SELECT COUNT(*) FROM " + table + " WHERE " + where).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
 }
 
 func TestDeletingAHeadingRemovesItsTasksOnly(t *testing.T) {

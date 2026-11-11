@@ -113,7 +113,12 @@ func migrate(db *sql.DB) error {
 	}
 
 	// 14. Repeaters replace the single-row recurring column (ADR 0006).
-	return migrateRepeaters(db)
+	if err := migrateRepeaters(db); err != nil {
+		return err
+	}
+
+	// 15. Sync groundwork: tombstone columns and initial field stamps (ADR 0010).
+	return migrateSyncGroundwork(db)
 }
 
 // uuidTables are the tables with an integer `id` handle. The task_tags join
@@ -543,4 +548,108 @@ func nullInt(v sql.NullInt64) any {
 		return nil
 	}
 	return v.Int64
+}
+
+// tombstoneTables are the synced tables with a stamped deleted_at (soft delete).
+var tombstoneTables = []string{"areas", "projects", "headings", "tasks", "tags", "repeaters", "habits", "task_tags"}
+
+// stampedEntities lists, for each table, the entity name and the fields that
+// get an initial stamp. Grow-only rows (logs, history) carry a single "_created".
+var stampedEntities = []struct {
+	table, entity string
+	fields        []string
+}{
+	{"areas", "area", areaCols},
+	{"projects", "project", projectCols},
+	{"headings", "heading", headingCols},
+	{"tasks", "task", taskCols},
+	{"tags", "tag", tagCols},
+	{"repeaters", "repeater", repeaterCols},
+	{"habits", "habit", habitCols},
+	{"habit_logs", "habit_log", []string{"_created"}},
+	{"task_history", "task_history", []string{"_created"}},
+}
+
+// migrateSyncGroundwork adds deleted_at to the synced tables and gives every
+// existing row initial field stamps, so the first folder exchange has a version
+// for everything. It only stamps rows that have none, so it is idempotent and
+// cheap on every open.
+func migrateSyncGroundwork(db *sql.DB) error {
+	for _, table := range tombstoneTables {
+		if !columnExists(db, table, "id") && table != "task_tags" {
+			continue
+		}
+		if table == "task_tags" && !columnExists(db, table, "task_id") {
+			continue
+		}
+		if err := addColumn(db, table, "deleted_at", "TEXT"); err != nil {
+			return err
+		}
+	}
+	if !columnExists(db, "tasks", "uuid") || !columnExists(db, "field_versions", "entity") {
+		return nil // partial legacy database
+	}
+	st := &SQLiteStore{db: db, q: db, sync: &syncCtx{now: time.Now}}
+	return st.WithTx(func(tx Store) error {
+		return tx.(*SQLiteStore).stampMissing()
+	})
+}
+
+// stampMissing stamps every row that has no stamps yet, including finished time
+// logs and live tag memberships.
+func (s *SQLiteStore) stampMissing() error {
+	type pending struct {
+		entity, uuid string
+		fields       []string
+	}
+	var todo []pending
+	collect := func(query string, entity string, fields []string, args ...any) error {
+		rows, err := s.q.Query(query, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var u sql.NullString
+			if err := rows.Scan(&u); err != nil {
+				return err
+			}
+			if u.Valid {
+				todo = append(todo, pending{entity, u.String, fields})
+			}
+		}
+		return rows.Err()
+	}
+	for _, e := range stampedEntities {
+		if !columnExists2(s.q, e.table, "uuid") {
+			continue
+		}
+		q := "SELECT uuid FROM " + e.table + " WHERE NOT EXISTS (SELECT 1 FROM field_versions f WHERE f.entity = ? AND f.uuid = " + e.table + ".uuid)"
+		if err := collect(q, e.entity, e.fields, e.entity); err != nil {
+			return err
+		}
+	}
+	// Finished time logs are synced; a running one is device-local.
+	if err := collect(`SELECT uuid FROM task_time_logs WHERE end_time IS NOT NULL AND NOT EXISTS
+		(SELECT 1 FROM field_versions f WHERE f.entity = 'time_log' AND f.uuid = task_time_logs.uuid)`, "time_log", []string{"_created"}); err != nil {
+		return err
+	}
+	if err := collect(`SELECT t.uuid || ':' || g.uuid FROM task_tags m JOIN tasks t ON t.id = m.task_id JOIN tags g ON g.id = m.tag_id
+		WHERE m.deleted_at IS NULL AND NOT EXISTS
+		(SELECT 1 FROM field_versions f WHERE f.entity = 'task_tag' AND f.uuid = t.uuid || ':' || g.uuid)`, "task_tag", []string{"deleted_at"}); err != nil {
+		return err
+	}
+	for _, p := range todo {
+		if err := s.stamp(p.entity, p.uuid, p.fields...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// columnExists2 is columnExists for a queryer (usable inside a transaction).
+func columnExists2(q queryer, table, column string) bool {
+	var n int
+	err := q.QueryRow("SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?", table, column).Scan(&n)
+	return err == nil && n > 0
 }

@@ -11,7 +11,7 @@ import (
 
 // Plain persistence for Repeaters. The rules (next date, generation) are in core.
 
-const repeaterCols = "id, uuid, kind, interval, weekdays, month_day, title, description, project_id, area_id, heading_id, priority, evening, deadline_offset, created_at, updated_at"
+const repeaterSelect = "id, uuid, kind, interval, weekdays, month_day, title, description, project_id, area_id, heading_id, priority, evening, deadline_offset, created_at, updated_at"
 
 func scanRepeater(row interface{ Scan(...any) error }) (*models.Repeater, error) {
 	var r models.Repeater
@@ -53,7 +53,7 @@ func offsetArg(r *models.Repeater) any {
 	return *r.DeadlineOffset
 }
 
-func (s *SQLiteStore) AddRepeater(r *models.Repeater) error {
+func (s *SQLiteStore) addRepeater(r *models.Repeater) error {
 	r.UUID = newUUID()
 	res, err := s.q.Exec(`INSERT INTO repeaters (uuid, kind, interval, weekdays, month_day, title, description, project_id, area_id, heading_id, priority, evening, deadline_offset)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -62,19 +62,24 @@ func (s *SQLiteStore) AddRepeater(r *models.Repeater) error {
 	if err != nil {
 		return err
 	}
-	r.ID, err = res.LastInsertId()
-	return err
+	if r.ID, err = res.LastInsertId(); err != nil {
+		return err
+	}
+	return s.stamp("repeater", r.UUID, repeaterCols...)
 }
 
 func (s *SQLiteStore) GetRepeater(id int64) (*models.Repeater, error) {
-	r, err := scanRepeater(s.q.QueryRow("SELECT "+repeaterCols+" FROM repeaters WHERE id = ?", id))
+	r, err := scanRepeater(s.q.QueryRow("SELECT "+repeaterSelect+" FROM repeaters WHERE id = ? AND deleted_at IS NULL", id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	return r, err
 }
 
-func (s *SQLiteStore) UpdateRepeater(r *models.Repeater) error {
+func (s *SQLiteStore) updateRepeater(r *models.Repeater) error {
+	if err := s.stampDiff("repeaters", "repeater", r.ID, repeaterCols, repeaterVals(r)); err != nil {
+		return err
+	}
 	_, err := s.q.Exec(`UPDATE repeaters SET kind = ?, interval = ?, weekdays = ?, month_day = ?, title = ?, description = ?,
 		project_id = ?, area_id = ?, heading_id = ?, priority = ?, evening = ?, deadline_offset = ?, updated_at = COALESCE(?, CURRENT_TIMESTAMP) WHERE id = ?`,
 		string(r.Rule.Kind), r.Rule.Interval, weekdaysCSV(r.Rule.Weekdays), r.Rule.MonthDay, r.Title, r.Description,
@@ -82,18 +87,16 @@ func (s *SQLiteStore) UpdateRepeater(r *models.Repeater) error {
 	return err
 }
 
-func (s *SQLiteStore) DeleteRepeater(id int64) error {
-	if _, err := s.q.Exec("UPDATE tasks SET repeater_id = NULL WHERE repeater_id = ?", id); err != nil {
-		return err
-	}
-	_, err := s.q.Exec("DELETE FROM repeaters WHERE id = ?", id)
-	return err
+// DeleteRepeater tombstones the repeater. Tasks that point at it keep the
+// reference; a tombstoned repeater reads as absent, which ends the series.
+func (s *SQLiteStore) deleteRepeater(id int64) error {
+	return s.softDelete("repeaters", "repeater", id)
 }
 
 // FindOccurrence returns the task generated for the repeater on the given day
 // (any status), or ErrNotFound.
 func (s *SQLiteStore) FindOccurrence(repeaterID int64, date string) (*models.Task, error) {
-	tasks, err := s.queryTasks(" WHERE t.repeater_id = ? AND t.occurrence_date = ?"+taskOrder, repeaterID, date)
+	tasks, err := s.queryTasks("t.repeater_id = ? AND t.occurrence_date = ?", taskOrder, repeaterID, date)
 	if err != nil {
 		return nil, err
 	}

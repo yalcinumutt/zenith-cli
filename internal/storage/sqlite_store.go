@@ -26,9 +26,10 @@ type queryer interface {
 }
 
 type SQLiteStore struct {
-	db *sql.DB
-	q  queryer
-	tx bool
+	db   *sql.DB
+	q    queryer
+	tx   bool
+	sync *syncCtx
 }
 
 // ErrNotFound is returned by single-row lookups that match nothing.
@@ -50,7 +51,7 @@ func (s *SQLiteStore) WithTx(fn func(Store) error) error {
 	if err != nil {
 		return err
 	}
-	if err := fn(&SQLiteStore{db: s.db, q: tx, tx: true}); err != nil {
+	if err := fn(&SQLiteStore{db: s.db, q: tx, tx: true, sync: s.sync}); err != nil {
 		_ = tx.Rollback()
 		return err
 	}
@@ -121,10 +122,10 @@ func NewSQLiteStoreAtPath(dbPath string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("could not run migrations: %w", err)
 	}
 
-	return &SQLiteStore{db: db, q: db}, nil
+	return &SQLiteStore{db: db, q: db, sync: &syncCtx{now: time.Now}}, nil
 }
 
-func (s *SQLiteStore) AddTask(task *models.Task) error {
+func (s *SQLiteStore) addTask(task *models.Task) error {
 	task.UUID = newUUID()
 	query := `INSERT INTO tasks (uuid, project_id, area_id, heading_id, parent_task_id, title, description, status, priority, when_kind, when_date, deadline, evening, repeater_id, occurrence_date, sort_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	res, err := s.q.Exec(query, task.UUID, task.ProjectID, task.AreaID, task.HeadingID, task.ParentID, task.Title, task.Description, task.Status, task.Priority, whenKindOrDefault(task.When), nullIfEmpty(task.When.Date), nullIfEmpty(task.Deadline), task.Evening, task.RepeaterID, nullIfEmpty(task.OccurrenceDate), nullIfEmpty(task.SortKey))
@@ -138,21 +139,35 @@ func (s *SQLiteStore) AddTask(task *models.Task) error {
 	}
 
 	task.ID = id
-	return nil
+	return s.stamp("task", task.UUID, taskCols...)
 }
 
 // taskOrder is the one place task order is defined: fractional index, then uuid.
 const taskOrder = " ORDER BY t.sort_key, t.uuid"
 
+// taskSelect reads a live task. A container (project, area, heading or parent)
+// that has been tombstoned reads as absent, so a live task under a deleted
+// container is container-less until the core repairs it (ADR 0010).
 const taskSelect = `
 		SELECT 
-			t.id, t.uuid, t.project_id, t.area_id, t.heading_id, t.parent_task_id, t.title, t.description, t.status, t.priority, t.when_kind, t.when_date, t.deadline, t.evening, t.repeater_id, t.occurrence_date, t.sort_key, t.created_at, t.updated_at,
+			t.id, t.uuid, 
+			CASE WHEN EXISTS(SELECT 1 FROM projects c WHERE c.id = t.project_id AND c.deleted_at IS NULL) THEN t.project_id END,
+			CASE WHEN EXISTS(SELECT 1 FROM areas c WHERE c.id = t.area_id AND c.deleted_at IS NULL) THEN t.area_id END,
+			CASE WHEN EXISTS(SELECT 1 FROM headings c JOIN projects hp ON hp.id = c.project_id WHERE c.id = t.heading_id AND c.deleted_at IS NULL AND hp.deleted_at IS NULL) THEN t.heading_id END,
+			CASE WHEN EXISTS(SELECT 1 FROM tasks c WHERE c.id = t.parent_task_id AND c.deleted_at IS NULL) THEN t.parent_task_id END,
+			t.title, t.description, t.status, t.priority, t.when_kind, t.when_date, t.deadline, t.evening, t.repeater_id, t.occurrence_date, t.sort_key, t.created_at, t.updated_at,
 			EXISTS(SELECT 1 FROM task_time_logs WHERE task_id = t.id AND end_time IS NULL) as is_running,
 			COALESCE((SELECT SUM(strftime('%s', COALESCE(end_time, CURRENT_TIMESTAMP)) - strftime('%s', start_time)) FROM task_time_logs WHERE task_id = t.id), 0) as total_time
 		FROM tasks t`
 
-func (s *SQLiteStore) queryTasks(where string, args ...any) ([]models.Task, error) {
-	rows, err := s.q.Query(taskSelect+where, args...)
+// queryTasks runs the shared task select. cond is an extra condition (or ""),
+// order an ORDER BY clause (or ""); tombstoned tasks are never returned.
+func (s *SQLiteStore) queryTasks(cond, order string, args ...any) ([]models.Task, error) {
+	where := " WHERE t.deleted_at IS NULL"
+	if cond != "" {
+		where += " AND (" + cond + ")"
+	}
+	rows, err := s.q.Query(taskSelect+where+order, args...)
 	if err != nil {
 		return nil, fmt.Errorf("could not query tasks: %w", err)
 	}
@@ -194,17 +209,17 @@ func (s *SQLiteStore) queryTasks(where string, args ...any) ([]models.Task, erro
 }
 
 func (s *SQLiteStore) GetTasks() ([]models.Task, error) {
-	return s.queryTasks(taskOrder)
+	return s.queryTasks("", taskOrder)
 }
 
 // GetSubtasks returns the direct children of a task, oldest first.
 func (s *SQLiteStore) GetSubtasks(parentID int64) ([]models.Task, error) {
-	return s.queryTasks(" WHERE t.parent_task_id = ?"+taskOrder, parentID)
+	return s.queryTasks("t.parent_task_id = ?", taskOrder, parentID)
 }
 
 // GetTask returns ErrNotFound when no task has the given id.
 func (s *SQLiteStore) GetTask(id int64) (*models.Task, error) {
-	tasks, err := s.queryTasks(" WHERE t.id = ?", id)
+	tasks, err := s.queryTasks("t.id = ?", "", id)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +231,10 @@ func (s *SQLiteStore) GetTask(id int64) (*models.Task, error) {
 
 // UpdateTask persists every task column and stamps updated_at with
 // task.UpdatedAt (or the database clock when it is zero).
-func (s *SQLiteStore) UpdateTask(task *models.Task) error {
+func (s *SQLiteStore) updateTask(task *models.Task) error {
+	if err := s.stampDiff("tasks", "task", task.ID, taskCols, taskVals(task)); err != nil {
+		return err
+	}
 	updated := any(nil)
 	if !task.UpdatedAt.IsZero() {
 		updated = formatTime(task.UpdatedAt)
@@ -229,19 +247,53 @@ func (s *SQLiteStore) UpdateTask(task *models.Task) error {
 	return nil
 }
 
-// DeleteTask removes the task and the rows that belong to it, so nothing is
-// left orphaned (foreign keys are not enforced). Subtasks are the core's job.
-func (s *SQLiteStore) DeleteTask(id int64) error {
-	for _, table := range []string{"task_tags", "task_time_logs", "task_history", "scheduled_timers"} {
-		if _, err := s.q.Exec("DELETE FROM "+table+" WHERE task_id = ?", id); err != nil {
+// DeleteTask tombstones the task and the tag memberships that belong to it, and
+// drops its device-local rows (reminders, a running time log). Finished time
+// logs and history are grow-only and stay. Subtasks are the core's job.
+func (s *SQLiteStore) deleteTask(id int64) error {
+	var uuid string
+	err := s.q.QueryRow("SELECT uuid FROM tasks WHERE id = ? AND deleted_at IS NULL", id).Scan(&uuid)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	rows, err := s.q.Query(`SELECT tg.id, tg.uuid FROM task_tags tt JOIN tags tg ON tg.id = tt.tag_id WHERE tt.task_id = ? AND tt.deleted_at IS NULL`, id)
+	if err != nil {
+		return err
+	}
+	type member struct {
+		id   int64
+		uuid string
+	}
+	var members []member
+	for rows.Next() {
+		var m member
+		if err := rows.Scan(&m.id, &m.uuid); err != nil {
+			rows.Close()
+			return err
+		}
+		members = append(members, m)
+	}
+	rows.Close()
+	for _, m := range members {
+		if err := s.detachTagFromTask(id, m.id); err != nil {
 			return err
 		}
 	}
-	_, err := s.q.Exec("DELETE FROM tasks WHERE id = ?", id)
-	return err
+	for _, q := range []string{
+		"DELETE FROM scheduled_timers WHERE task_id = ?",
+		"DELETE FROM task_time_logs WHERE task_id = ? AND end_time IS NULL",
+	} {
+		if _, err := s.q.Exec(q, id); err != nil {
+			return err
+		}
+	}
+	return s.softDelete("tasks", "task", id)
 }
 
-func (s *SQLiteStore) AddHabit(habit *models.Habit) error {
+func (s *SQLiteStore) addHabit(habit *models.Habit) error {
 	habit.UUID = newUUID()
 	query := `INSERT INTO habits (uuid, name, description, frequency) VALUES (?, ?, ?, ?)`
 	res, err := s.q.Exec(query, habit.UUID, habit.Name, habit.Description, habit.Frequency)
@@ -253,11 +305,11 @@ func (s *SQLiteStore) AddHabit(habit *models.Habit) error {
 		return err
 	}
 	habit.ID = id
-	return nil
+	return s.stamp("habit", habit.UUID, habitCols...)
 }
 
 func (s *SQLiteStore) GetHabits() ([]models.Habit, error) {
-	rows, err := s.q.Query("SELECT id, uuid, name, description, frequency, created_at, updated_at FROM habits")
+	rows, err := s.q.Query("SELECT id, uuid, name, description, frequency, created_at, updated_at FROM habits WHERE deleted_at IS NULL")
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +328,7 @@ func (s *SQLiteStore) GetHabits() ([]models.Habit, error) {
 
 func (s *SQLiteStore) GetHabit(id int64) (*models.Habit, error) {
 	var h models.Habit
-	err := s.q.QueryRow("SELECT id, uuid, name, description, frequency, created_at, updated_at FROM habits WHERE id = ?", id).
+	err := s.q.QueryRow("SELECT id, uuid, name, description, frequency, created_at, updated_at FROM habits WHERE id = ? AND deleted_at IS NULL", id).
 		Scan(&h.ID, &h.UUID, &h.Name, &h.Description, &h.Frequency, &h.CreatedAt, &h.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -287,12 +339,15 @@ func (s *SQLiteStore) GetHabit(id int64) (*models.Habit, error) {
 	return &h, nil
 }
 
-func (s *SQLiteStore) LogHabit(habitID int64) error {
-	_, err := s.q.Exec("INSERT INTO habit_logs (uuid, habit_id) VALUES (?, ?)", newUUID(), habitID)
-	return err
+func (s *SQLiteStore) logHabit(habitID int64) error {
+	u := newUUID()
+	if _, err := s.q.Exec("INSERT INTO habit_logs (uuid, habit_id) VALUES (?, ?)", u, habitID); err != nil {
+		return err
+	}
+	return s.stamp("habit_log", u, "_created")
 }
 
-func (s *SQLiteStore) AddProject(project *models.Project) error {
+func (s *SQLiteStore) addProject(project *models.Project) error {
 	project.UUID = newUUID()
 	res, err := s.q.Exec("INSERT INTO projects (uuid, area_id, name, description, status, sort_key) VALUES (?, ?, ?, ?, ?, ?)", project.UUID, project.AreaID, project.Name, project.Description, project.Status, nullIfEmpty(project.SortKey))
 	if err != nil {
@@ -303,11 +358,11 @@ func (s *SQLiteStore) AddProject(project *models.Project) error {
 		return err
 	}
 	project.ID = id
-	return nil
+	return s.stamp("project", project.UUID, projectCols...)
 }
 
 func (s *SQLiteStore) GetProjects() ([]models.Project, error) {
-	rows, err := s.q.Query("SELECT id, uuid, area_id, name, description, status, sort_key, created_at, updated_at FROM projects ORDER BY sort_key, uuid")
+	rows, err := s.q.Query("SELECT id, uuid, area_id, name, description, status, sort_key, created_at, updated_at FROM projects WHERE deleted_at IS NULL ORDER BY sort_key, uuid")
 	if err != nil {
 		return nil, err
 	}
@@ -328,11 +383,11 @@ func (s *SQLiteStore) GetProjects() ([]models.Project, error) {
 
 func (s *SQLiteStore) SearchTasks(query string) ([]models.Task, error) {
 	term := "%" + query + "%"
-	return s.queryTasks(" WHERE t.title LIKE ? OR t.description LIKE ?", term, term)
+	return s.queryTasks("t.title LIKE ? OR t.description LIKE ?", taskOrder, term, term)
 }
 
 func (s *SQLiteStore) SearchHabits(query string) ([]models.Habit, error) {
-	sqlQuery := `SELECT id, uuid, name, description, frequency, created_at, updated_at FROM habits WHERE name LIKE ? OR description LIKE ?`
+	sqlQuery := `SELECT id, uuid, name, description, frequency, created_at, updated_at FROM habits WHERE deleted_at IS NULL AND (name LIKE ? OR description LIKE ?)`
 	searchTerm := "%" + query + "%"
 	rows, err := s.q.Query(sqlQuery, searchTerm, searchTerm)
 	if err != nil {
@@ -361,7 +416,8 @@ func (s *SQLiteStore) OpenTimeLog(taskID int64, start time.Time) error {
 // seconds it ran. closed is false when the task had no open log.
 func (s *SQLiteStore) CloseOpenTimeLog(taskID int64, end time.Time) (secs int64, closed bool, err error) {
 	var logID, startUnix int64
-	err = s.q.QueryRow(`SELECT id, CAST(strftime('%s', start_time) AS INTEGER) FROM task_time_logs WHERE task_id = ? AND end_time IS NULL`, taskID).Scan(&logID, &startUnix)
+	var logUUID string
+	err = s.q.QueryRow(`SELECT id, uuid, CAST(strftime('%s', start_time) AS INTEGER) FROM task_time_logs WHERE task_id = ? AND end_time IS NULL`, taskID).Scan(&logID, &logUUID, &startUnix)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, nil
 	}
@@ -371,22 +427,28 @@ func (s *SQLiteStore) CloseOpenTimeLog(taskID int64, end time.Time) (secs int64,
 	if _, err = s.q.Exec(`UPDATE task_time_logs SET end_time = ? WHERE id = ?`, formatTime(end), logID); err != nil {
 		return 0, false, err
 	}
+	// A time log becomes synced when it is stopped; while running it is device-local.
+	if err = s.stamp("time_log", logUUID, "_created"); err != nil {
+		return 0, false, err
+	}
 	return end.Unix() - startUnix, true, nil
 }
 
 // AddTag inserts a tag. Name uniqueness is the core's rule, not the database's.
-func (s *SQLiteStore) AddTag(tag *models.Tag) error {
+func (s *SQLiteStore) addTag(tag *models.Tag) error {
 	tag.UUID = newUUID()
 	res, err := s.q.Exec(`INSERT INTO tags (uuid, name, color) VALUES (?, ?, ?)`, tag.UUID, tag.Name, tag.Color)
 	if err != nil {
 		return err
 	}
-	tag.ID, err = res.LastInsertId()
-	return err
+	if tag.ID, err = res.LastInsertId(); err != nil {
+		return err
+	}
+	return s.stamp("tag", tag.UUID, tagCols...)
 }
 
 func (s *SQLiteStore) GetTags() ([]models.Tag, error) {
-	rows, err := s.q.Query(`SELECT id, uuid, name, color, created_at FROM tags ORDER BY id`)
+	rows, err := s.q.Query(`SELECT id, uuid, name, color, created_at FROM tags WHERE deleted_at IS NULL ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -404,19 +466,66 @@ func (s *SQLiteStore) GetTags() ([]models.Tag, error) {
 	return tags, rows.Err()
 }
 
-func (s *SQLiteStore) UpdateTag(tag *models.Tag) error {
+func (s *SQLiteStore) updateTag(tag *models.Tag) error {
+	if err := s.stampDiff("tags", "tag", tag.ID, tagCols, tagVals(tag)); err != nil {
+		return err
+	}
 	_, err := s.q.Exec(`UPDATE tags SET name = ?, color = ? WHERE id = ?`, tag.Name, tag.Color, tag.ID)
 	return err
 }
 
-func (s *SQLiteStore) DetachTagFromTask(taskID, tagID int64) error {
-	_, err := s.q.Exec(`DELETE FROM task_tags WHERE task_id = ? AND tag_id = ?`, taskID, tagID)
-	return err
+// membershipUUID identifies a task-tag membership for stamping.
+func (s *SQLiteStore) membershipUUID(taskID, tagID int64) (string, error) {
+	var tu, gu string
+	if err := s.q.QueryRow("SELECT uuid FROM tasks WHERE id = ?", taskID).Scan(&tu); err != nil {
+		return "", err
+	}
+	if err := s.q.QueryRow("SELECT uuid FROM tags WHERE id = ?", tagID).Scan(&gu); err != nil {
+		return "", err
+	}
+	return tu + ":" + gu, nil
 }
 
-func (s *SQLiteStore) AttachTagToTask(taskID, tagID int64) error {
-	_, err := s.q.Exec(`INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?, ?)`, taskID, tagID)
-	return err
+// DetachTagFromTask tombstones the membership (a stamped removal).
+func (s *SQLiteStore) detachTagFromTask(taskID, tagID int64) error {
+	res, err := s.q.Exec(`UPDATE task_tags SET deleted_at = ? WHERE task_id = ? AND tag_id = ? AND deleted_at IS NULL`, formatTime(s.sync.now()), taskID, tagID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil
+	}
+	mu, err := s.membershipUUID(taskID, tagID)
+	if err != nil {
+		return err
+	}
+	return s.stamp("task_tag", mu, "deleted_at")
+}
+
+// AttachTagToTask adds the membership, reviving a tombstoned one. Attaching a
+// tag the task already has changes and stamps nothing.
+func (s *SQLiteStore) attachTagToTask(taskID, tagID int64) error {
+	var deleted sql.NullString
+	err := s.q.QueryRow(`SELECT deleted_at FROM task_tags WHERE task_id = ? AND tag_id = ?`, taskID, tagID).Scan(&deleted)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		if _, err := s.q.Exec(`INSERT INTO task_tags (task_id, tag_id) VALUES (?, ?)`, taskID, tagID); err != nil {
+			return err
+		}
+	case err != nil:
+		return err
+	case deleted.Valid:
+		if _, err := s.q.Exec(`UPDATE task_tags SET deleted_at = NULL WHERE task_id = ? AND tag_id = ?`, taskID, tagID); err != nil {
+			return err
+		}
+	default:
+		return nil // already attached
+	}
+	mu, err := s.membershipUUID(taskID, tagID)
+	if err != nil {
+		return err
+	}
+	return s.stamp("task_tag", mu, "deleted_at")
 }
 
 func (s *SQLiteStore) GetTagsForTask(taskID int64) ([]models.Tag, error) {
@@ -424,7 +533,8 @@ func (s *SQLiteStore) GetTagsForTask(taskID int64) ([]models.Tag, error) {
 		SELECT t.id, t.uuid, t.name, t.color, t.created_at 
 		FROM tags t
 		JOIN task_tags tt ON t.id = tt.tag_id
-		WHERE tt.task_id = ?`, taskID)
+		WHERE tt.task_id = ? AND tt.deleted_at IS NULL AND t.deleted_at IS NULL
+		ORDER BY t.id`, taskID)
 	if err != nil {
 		return nil, err
 	}
@@ -484,7 +594,7 @@ func (s *SQLiteStore) ClaimScheduledTimer(id int64) (bool, error) {
 	return n == 1, err
 }
 
-func (s *SQLiteStore) AddTaskHistory(history *models.TaskHistory) error {
+func (s *SQLiteStore) addTaskHistory(history *models.TaskHistory) error {
 	stamp := any(nil)
 	if !history.Timestamp.IsZero() {
 		stamp = formatTime(history.Timestamp)
@@ -500,7 +610,7 @@ func (s *SQLiteStore) AddTaskHistory(history *models.TaskHistory) error {
 		return err
 	}
 	history.ID = id
-	return nil
+	return s.stamp("task_history", history.UUID, "_created")
 }
 
 func (s *SQLiteStore) GetTaskHistory(taskID int64) ([]models.TaskHistory, error) {
