@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=Zenith
+Comment=Tasks, projects and time in one calm place
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/Zenith %u
+Terminal=false
+Type=Application
+Icon=Zenith
+Categories=Utility;
+StartupWMClass=Zenith
+
+ 

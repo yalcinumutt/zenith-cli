@@ -1,0 +1,7 @@
+.task
+.wails
+bin
+frontend/dist/*
+!frontend/dist/.gitkeep
+frontend/node_modules
+frontend/bindings

@@ -346,3 +346,47 @@ func TestExternalWriteProducesExternalChange(t *testing.T) {
 		t.Fatal("no ExternalChange within 2s of another connection's write")
 	}
 }
+
+func TestEditAndSetTags(t *testing.T) {
+	c, _ := newCore(t)
+	task, _ := c.Tasks.Add(core.AddTaskInput{Title: "old"})
+	title, notes := "  new title ", "some notes"
+	if err := c.Tasks.Edit(task.ID, core.TaskEdit{Title: &title, Description: &notes}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := c.Tasks.Get(task.ID)
+	if got.Title != "new title" || got.Description != "some notes" {
+		t.Errorf("got %+v", got)
+	}
+	empty := " "
+	if err := c.Tasks.Edit(task.ID, core.TaskEdit{Title: &empty}); !errors.Is(err, core.ErrInvalid) {
+		t.Errorf("empty title: %v", err)
+	}
+	if got, _ := c.Tasks.Get(task.ID); got.Title != "new title" {
+		t.Error("a refused edit changed the task")
+	}
+
+	if err := c.Tasks.SetTags(task.ID, []string{"Work", "home", "WORK"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := c.Tasks.Get(task.ID); len(got.Tags) != 2 {
+		t.Fatalf("tags = %+v", got.Tags)
+	}
+	events := collect(c)
+	if err := c.Tasks.SetTags(task.ID, []string{"work"}); err != nil { // keeps Work (case-insensitive), drops home
+		t.Fatal(err)
+	}
+	got, _ = c.Tasks.Get(task.ID)
+	if len(got.Tags) != 1 || got.Tags[0].Name != "Work" {
+		t.Errorf("tags = %+v", got.Tags)
+	}
+	if len(events()) != 2 {
+		t.Error("expected one TaskChanged + ListsInvalidated")
+	}
+	if err := c.Tasks.SetTags(task.ID, []string{"Work"}); err != nil || len(events()) != 0 {
+		t.Error("no change should publish nothing")
+	}
+	if all, _ := c.Tags.List(); len(all) != 2 {
+		t.Errorf("tags are reused, not duplicated: %+v", all)
+	}
+}

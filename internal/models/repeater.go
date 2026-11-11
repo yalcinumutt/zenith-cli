@@ -20,8 +20,8 @@ const (
 // RepeatRule says when occurrences fall.
 type RepeatRule struct {
 	Kind     RepeatKind `json:"kind"`
-	Interval int        `json:"interval"`           // every N units, >= 1
-	Weekdays []int      `json:"weekdays,omitempty"` // weeks only: 0=Sunday .. 6=Saturday; empty = the occurrence's own weekday
+	Interval int        `json:"interval"`            // every N units, >= 1
+	Weekdays []int      `json:"weekdays,omitempty"`  // weeks only: 0=Sunday .. 6=Saturday; empty = the occurrence's own weekday
 	MonthDay int        `json:"month_day,omitempty"` // months only: 1..31, clamped to the month's length
 }
 

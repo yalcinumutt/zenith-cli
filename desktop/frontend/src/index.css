@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens. A muted palette with one accent; red is reserved for overdue
+ * Deadlines. These values are the single source for scripts/contrast.mjs, which
+ * checks every text pair at 4.5:1 in both themes (see docs/desktop-accessibility.md).
+ */
+:root {
+  --bg: #ffffff;
+  --sidebar: #f5f5f4;
+  --card: #ffffff;
+  --fg: #1c1917;
+  --muted: #5f5b57;
+  --line: #e7e5e4;
+  --accent: #0369a1;
+  --accent-fg: #ffffff;
+  --danger: #b91c1c;
+  --selected: #e0f2fe;
+  --hover: #f0efee;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #171717;
+  --sidebar: #1f1f1e;
+  --card: #262626;
+  --fg: #f5f5f4;
+  --muted: #a8a29e;
+  --line: #3a3a38;
+  --accent: #38bdf8;
+  --accent-fg: #0b1220;
+  --danger: #f87171;
+  --selected: #0b2f45;
+  --hover: #2a2a29;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-sidebar: var(--sidebar);
+  --color-card: var(--card);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-danger: var(--danger);
+  --color-selected: var(--selected);
+  --color-hover: var(--hover);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+input, textarea, [contenteditable] { user-select: text; }
+
+/* A visible focus ring on everything reachable by keyboard. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+button { cursor: default; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
+.pop-in { animation: pop-in 120ms ease-out; }

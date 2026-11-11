@@ -1,6 +1,6 @@
-# Zenith CLI
+# Zenith
 
-**Zenith** is a powerful, open-source productivity tool for the terminal. It combines **Task Management**, **Habit Tracking**, and **Project Management** into a single, high-performance Go application with a stunning Terminal User Interface (TUI).
+**Zenith** is a powerful, open-source productivity tool with a **desktop app (beta)**, a terminal dashboard and a CLI, all on one shared SQLite database. It combines **Task Management**, **Habit Tracking**, and **Project Management** into a single, high-performance Go application with a stunning Terminal User Interface (TUI).
 
 Inspired by `taskbook`, Zenith takes your productivity to the next level with SQLite storage, interactive dashboards, and advanced features like recurring tasks and daily summaries.
 
@@ -18,13 +18,38 @@ Inspired by `taskbook`, Zenith takes your productivity to the next level with SQ
 - **📜 Activity Log**: View a historical timeline of finished tasks.
 - **📊 Daily Summary**: Get a snapshot of your day with `zenith summary`.
 - **💻 Interactive TUI**: A full-screen dashboard for focused work (`zenith tui`).
-- **🗄️ SQLite Storage**: Fast, reliable, and relational data management.
+- **🗄️ SQLite Storage**: Fast, reliable, and relational data management (pure Go, no CGO).
+- **🖥️ Desktop app (beta)**: a calm, keyboard-first Things-style app on the same data (see below).
+- **📂 Areas, Projects, Headings and Subtasks**, When vs Deadline, the six lists (Inbox, Today, Upcoming, Anytime, Someday, Logbook) and repeating tasks.
+
+## 🖥️ Desktop app (beta)
+
+The desktop app is a free beta. It shares `~/.zenith/data.db` with the CLI and the TUI, so a task added in one shows up in the others straight away.
+
+Download it from the [Releases](https://github.com/yalcinumutt/zenith-cli/releases) page (releases tagged `desktop-v*`):
+
+| OS | File | Install |
+| --- | --- | --- |
+| macOS | `Zenith-<version>-macos-arm64.dmg` / `-macos-amd64.dmg` | Open the dmg and drag Zenith to Applications. **Builds may be unsigned**: right-click Zenith, choose **Open**, then **Open** again (once). |
+| Windows 10/11 | `Zenith-<version>-windows-amd64.exe` | Run the installer. SmartScreen may warn because the beta is not signed: "More info" → "Run anyway". |
+| Linux | `Zenith-<version>-linux-amd64.AppImage`, `.deb`, `.rpm` | AppImage: `chmod +x` and run. Needs a recent distribution (GTK 4 and WebKitGTK 6.0). |
+
+**Known limitations**
+
+- It is a beta; expect rough edges.
+- **Reminders only fire while the Zenith app or `zenith daemon` is running.** Closing the window quits the app. Run `zenith timer daemon` in a terminal to keep reminders firing in the background.
+- Linux support is for recent distributions; tray icons and global shortcuts are not in v1.
+- Device-to-device sync is not in v1 (it is the first planned feature after it).
+
+Keyboard-first: `⌘/Ctrl+K` opens the command palette, `⌘/Ctrl+N` adds a to-do, `⌘/Ctrl+1…6` jump between the six lists, `Space` expands a task, `x` completes it and `⌘/Ctrl+↑/↓` reorders it.
+
+If you find it useful, please consider [sponsoring the project](https://github.com/sponsors/yalcinumutt).
 
 ## 🚀 Installation
 
 ### From Source
 
-Ensure you have [Go](https://go.dev/) installed (v1.22+).
+Ensure you have [Go](https://go.dev/) installed (the version in `go.mod`). The CLI is pure Go and needs **no C compiler**.
 
 ```bash
 git clone https://github.com/yalcinumutt/zenith-cli.git
@@ -72,7 +97,6 @@ zenith task list     # View all tasks (includes RUNNING status and timers)
 zenith task done 1   # Complete task #1
 
 # Move tasks between projects
-# If no projects exist, Zenith creates a default "Anytime" project.
 zenith task move 1 2 # Move task #1 to project #2
 ```
 
@@ -87,8 +111,14 @@ zenith habit list                # View streaks and progress
 ### Projects
 
 ```bash
-zenith project add "Open Source Zenith"
+zenith area add "Work"
+zenith project add "Open Source Zenith" --area 1
 zenith project list
+zenith heading add 1 "Phase 1"          # sections inside a project
+zenith task add "Write docs" --heading 1 --when today
+zenith task add "Review" --parent 5      # a subtask
+zenith task repeat 5 --weeks 1 --on mon,thu
+zenith list today                        # inbox | today | upcoming | anytime | someday | logbook
 ```
 
 ### Dashboard & Utilities

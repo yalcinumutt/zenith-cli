@@ -34,8 +34,8 @@ var taskAddCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		title := strings.Join(args, " ")
 		in := core.AddTaskInput{
-			Title:     title,
-			Priority:  models.PriorityMedium,
+			Title:    title,
+			Priority: models.PriorityMedium,
 		}
 
 		if projectID != 0 {

@@ -261,6 +261,80 @@ func (s *TaskService) SetHeading(id int64, headingID *int64) error {
 	})
 }
 
+// TaskEdit carries the free-text fields of a task; nil fields are left as they are.
+type TaskEdit struct {
+	Title       *string
+	Description *string
+}
+
+// Edit changes a task's title and/or notes. An empty title is refused.
+func (s *TaskService) Edit(id int64, e TaskEdit) error {
+	if e.Title != nil {
+		trimmed := strings.TrimSpace(*e.Title)
+		if trimmed == "" {
+			return invalidError("task title cannot be empty")
+		}
+		e.Title = &trimmed
+	}
+	return s.edit(id, func(t *models.Task) {
+		if e.Title != nil {
+			t.Title = *e.Title
+		}
+		if e.Description != nil {
+			t.Description = *e.Description
+		}
+	})
+}
+
+// SetTags makes the task's tags exactly the given names (matched
+// case-insensitively), attaching new ones and detaching the rest in one change.
+func (s *TaskService) SetTags(id int64, names []string) error {
+	return s.run(func(tx storage.Store, ch *changes) error {
+		t, err := s.get(tx, id)
+		if err != nil {
+			return err
+		}
+		want := map[string]string{} // normalized -> display name
+		for _, n := range names {
+			if key := NormalizeTagName(n); key != "" {
+				if _, dup := want[key]; !dup {
+					want[key] = strings.TrimSpace(n)
+				}
+			}
+		}
+		changed := false
+		have := map[string]bool{}
+		for _, tag := range t.Tags {
+			key := NormalizeTagName(tag.Name)
+			if _, keep := want[key]; keep {
+				have[key] = true
+				continue
+			}
+			if err := tx.DetachTagFromTask(id, tag.ID); err != nil {
+				return err
+			}
+			changed = true
+		}
+		for key, name := range want {
+			if have[key] {
+				continue
+			}
+			tag, err := findOrCreateTag(tx, name, "")
+			if err != nil {
+				return err
+			}
+			if err := tx.AttachTagToTask(id, tag.ID); err != nil {
+				return err
+			}
+			changed = true
+		}
+		if changed {
+			ch.add(id, ChangeTagged)
+		}
+		return nil
+	})
+}
+
 // SetWhen changes when the task is meant to be worked on. Moving it off a
 // scheduled day also clears "This Evening".
 func (s *TaskService) SetWhen(id int64, w models.When) error {

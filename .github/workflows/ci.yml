@@ -9,6 +9,7 @@ permissions:
   contents: read
 
 jobs:
+  # The CLI, TUI and shared core: pure Go, no CGO, no desktop dependencies.
   test:
     name: test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -18,6 +19,9 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     env:
       CGO_ENABLED: "0"
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -25,6 +29,53 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
       - name: Vet
-        run: go vet ./...
+        run: go vet $(go list ./... | grep -v '/desktop$')
       - name: Test
-        run: go test ./...
+        run: go test $(go list ./... | grep -v '/desktop$')
+
+  # The desktop app (Wails v3 shell + React front end) must compile on all three
+  # OSes, and the front end must typecheck, lint and build.
+  desktop:
+    name: desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: desktop/frontend/pnpm-lock.yaml
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev libwayland-dev
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
+      - name: Generate bindings
+        working-directory: desktop
+        run: wails3 generate bindings -clean=true -ts -i
+      - name: Front end
+        working-directory: desktop/frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm check
+          pnpm build
+      - name: Vet shell
+        run: go vet ./desktop ./internal/appapi
+      - name: Compile shell
+        run: go build -o "$RUNNER_TEMP/zenith-desktop" ./desktop

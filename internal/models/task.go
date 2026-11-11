@@ -39,27 +39,27 @@ type When struct {
 }
 
 type Task struct {
-	ID          int64     `json:"id"`
-	UUID        string    `json:"uuid"` // sync identity (ADR 0003); ID stays the local handle
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Status      string    `json:"status"` // open, completed, cancelled
-	Priority    Priority  `json:"priority"`
-	ProjectID   *int64    `json:"project_id"`
-	AreaID      *int64    `json:"area_id"`    // set only for tasks filed directly in an Area
-	HeadingID   *int64    `json:"heading_id"` // set only inside a Project
-	ParentID    *int64    `json:"parent_id"`  // container Task when this is a Subtask (ADR 0005)
-	When        When      `json:"when"`
-	Deadline    string    `json:"deadline"` // YYYY-MM-DD, empty when none
-	Evening     bool      `json:"evening"`  // "This Evening" within Today
-	Tags        []Tag     `json:"tags"`
-	IsRunning   bool      `json:"is_running"`
-	TotalTime   int64     `json:"total_time"` // in seconds
-	RepeaterID     *int64 `json:"repeater_id"`     // the Repeater this task is an occurrence of
-	OccurrenceDate string `json:"occurrence_date"` // the day this occurrence was generated for
-	SortKey     string    `json:"sort_key"`   // fractional index; order is (SortKey, UUID)
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID             int64     `json:"id"`
+	UUID           string    `json:"uuid"` // sync identity (ADR 0003); ID stays the local handle
+	Title          string    `json:"title"`
+	Description    string    `json:"description"`
+	Status         string    `json:"status"` // open, completed, cancelled
+	Priority       Priority  `json:"priority"`
+	ProjectID      *int64    `json:"project_id"`
+	AreaID         *int64    `json:"area_id"`    // set only for tasks filed directly in an Area
+	HeadingID      *int64    `json:"heading_id"` // set only inside a Project
+	ParentID       *int64    `json:"parent_id"`  // container Task when this is a Subtask (ADR 0005)
+	When           When      `json:"when"`
+	Deadline       string    `json:"deadline"` // YYYY-MM-DD, empty when none
+	Evening        bool      `json:"evening"`  // "This Evening" within Today
+	Tags           []Tag     `json:"tags"`
+	IsRunning      bool      `json:"is_running"`
+	TotalTime      int64     `json:"total_time"`      // in seconds
+	RepeaterID     *int64    `json:"repeater_id"`     // the Repeater this task is an occurrence of
+	OccurrenceDate string    `json:"occurrence_date"` // the day this occurrence was generated for
+	SortKey        string    `json:"sort_key"`        // fractional index; order is (SortKey, UUID)
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // InProgress is derived, never stored: an open task with a running Timer.
