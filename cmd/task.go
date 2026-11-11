@@ -23,6 +23,8 @@ var parentID int64
 var areaFlag int64
 var headingFlag int64
 var dueStr string
+var whenStr string
+var eveningFlag bool
 var priorityStr string
 
 var taskAddCmd = &cobra.Command{
@@ -50,13 +52,15 @@ var taskAddCmd = &cobra.Command{
 			in.HeadingID = &headingFlag
 		}
 
-		if dueStr != "" {
-			t, err := time.Parse("2006-01-02", dueStr)
+		if whenStr != "" {
+			w, err := core.ParseWhen(whenStr, time.Now())
 			if err != nil {
-				return fmt.Errorf("invalid due date format (use YYYY-MM-DD): %w", err)
+				return err
 			}
-			in.DueDate = &t
+			in.When = w
 		}
+		in.Deadline = dueStr
+		in.Evening = eveningFlag
 
 		if priorityStr != "" {
 			switch strings.ToLower(priorityStr) {
@@ -235,6 +239,57 @@ var taskParentCmd = &cobra.Command{
 			fmt.Printf("Task %d is now top-level.\n", id)
 		} else {
 			fmt.Printf("Task %d is now a subtask of %d.\n", id, *parent)
+		}
+		return nil
+	},
+}
+
+var taskWhenCmd = &cobra.Command{
+	Use:   "when [id] [today|tomorrow|someday|anytime|YYYY-MM-DD]",
+	Short: "Set when a task is meant to be worked on",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := parseID("task ID", args[0])
+		if err != nil {
+			return err
+		}
+		w, err := core.ParseWhen(args[1], time.Now())
+		if err != nil {
+			return err
+		}
+		if err := app.Tasks.SetWhen(id, w); err != nil {
+			return err
+		}
+		if eveningFlag {
+			if err := app.Tasks.SetEvening(id, true); err != nil {
+				return err
+			}
+		}
+		fmt.Printf("Task %d: %s\n", id, describeWhen(w, eveningFlag))
+		return nil
+	},
+}
+
+var taskDeadlineCmd = &cobra.Command{
+	Use:   "deadline [id] [YYYY-MM-DD|none]",
+	Short: "Set or clear a task's deadline",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := parseID("task ID", args[0])
+		if err != nil {
+			return err
+		}
+		date := args[1]
+		if date == "none" {
+			date = ""
+		}
+		if err := app.Tasks.SetDeadline(id, date); err != nil {
+			return err
+		}
+		if date == "" {
+			fmt.Printf("Task %d: deadline cleared\n", id)
+		} else {
+			fmt.Printf("Task %d: deadline %s\n", id, date)
 		}
 		return nil
 	},
@@ -442,8 +497,13 @@ func init() {
 	taskAddCmd.Flags().Int64Var(&areaFlag, "area", 0, "Area ID (for a task outside any project)")
 	taskAddCmd.Flags().Int64Var(&headingFlag, "heading", 0, "Heading ID (files the task in the heading's project)")
 	taskAddCmd.Flags().Int64Var(&parentID, "parent", 0, "Parent task ID (creates a subtask)")
-	taskAddCmd.Flags().StringVarP(&dueStr, "due", "d", "", "Due date (YYYY-MM-DD)")
+	taskAddCmd.Flags().StringVarP(&dueStr, "deadline", "d", "", "Deadline (YYYY-MM-DD)")
+	taskAddCmd.Flags().StringVar(&dueStr, "due", "", "Alias of --deadline")
+	_ = taskAddCmd.Flags().MarkHidden("due")
+	taskAddCmd.Flags().StringVarP(&whenStr, "when", "w", "", "When: today, tomorrow, someday, anytime or YYYY-MM-DD")
+	taskAddCmd.Flags().BoolVar(&eveningFlag, "evening", false, "Put the task under This Evening (needs a scheduled --when)")
 	taskAddCmd.Flags().StringVarP(&priorityStr, "priority", "P", "medium", "Priority (low, medium, high, critical)")
+	taskWhenCmd.Flags().BoolVar(&eveningFlag, "evening", false, "Put the task under This Evening")
 	taskTagCmd.Flags().StringVarP(&tagColor, "color", "c", "", "Color for the tag")
 
 	rootCmd.AddCommand(taskCmd)
@@ -454,6 +514,8 @@ func init() {
 	taskCmd.AddCommand(taskReopenCmd)
 	taskCmd.AddCommand(taskParentCmd)
 	taskCmd.AddCommand(taskAreaCmd)
+	taskCmd.AddCommand(taskWhenCmd)
+	taskCmd.AddCommand(taskDeadlineCmd)
 	taskCmd.AddCommand(taskHeadingCmd)
 	taskCmd.AddCommand(taskDeleteCmd)
 	taskCmd.AddCommand(taskStartCmd)

@@ -79,7 +79,7 @@ func TestNotFoundIsReportedByEveryOperation(t *testing.T) {
 		"complete": func() error { return c.Tasks.Complete(42) },
 		"reopen":   func() error { return c.Tasks.Reopen(42) },
 		"move":     func() error { return c.Tasks.MoveToProject(42, 1) },
-		"plan":     func() error { return c.Tasks.Plan(42, time.Now()) },
+		"plan":     func() error { return c.Tasks.SetWhen(42, models.When{Kind: models.WhenSomeday}) },
 		"delete":   func() error { return c.Tasks.Delete(42) },
 		"tag":      func() error { return c.Tasks.Tag(42, "x", "") },
 		"start":    func() error { return c.Tasks.StartTimer(42) },
@@ -182,19 +182,18 @@ func TestCompleteStopsRunningTimerAndRecordsStatusChange(t *testing.T) {
 }
 
 func TestEditsRecordEditedHistory(t *testing.T) {
-	c, clock := newCore(t)
+	c, _ := newCore(t)
 	task, _ := c.Tasks.Add(core.AddTaskInput{Title: "plan me"})
-	day := clock.now.Truncate(24 * time.Hour)
 	proj, _ := c.Projects.Add("P", nil)
 
-	if err := c.Tasks.Plan(task.ID, day); err != nil {
+	if err := c.Tasks.SetWhen(task.ID, models.When{Kind: models.WhenScheduled, Date: "2026-03-02"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Tasks.MoveToProject(task.ID, proj.ID); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := c.Tasks.Get(task.ID)
-	if got.PlannedDate == nil || got.ProjectID == nil || *got.ProjectID != proj.ID {
+	if got.When.Kind != models.WhenScheduled || got.ProjectID == nil || *got.ProjectID != proj.ID {
 		t.Errorf("got %+v", got)
 	}
 	if a := actions(t, c, task.ID); !eq(a, []string{"created", "edited", "edited"}) {
@@ -257,7 +256,7 @@ func TestEveryMutationPublishesAnEvent(t *testing.T) {
 		{"start", func() error { return c.Tasks.StartTimer(task.ID) }, core.ChangeTimer},
 		{"stop", func() error { return c.Tasks.StopTimer(task.ID) }, core.ChangeTimer},
 		{"tag", func() error { return c.Tasks.Tag(task.ID, "t", "") }, core.ChangeTagged},
-		{"plan", func() error { return c.Tasks.Plan(task.ID, time.Now()) }, core.ChangeUpdated},
+		{"plan", func() error { return c.Tasks.SetWhen(task.ID, models.When{Kind: models.WhenSomeday}) }, core.ChangeUpdated},
 		{"move", func() error { return c.Tasks.MoveToProject(task.ID, proj.ID) }, core.ChangeUpdated},
 		{"complete", func() error { return c.Tasks.Complete(task.ID) }, core.ChangeStatus},
 		{"reopen", func() error { return c.Tasks.Reopen(task.ID) }, core.ChangeStatus},

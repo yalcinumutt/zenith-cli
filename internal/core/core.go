@@ -39,6 +39,7 @@ type Core struct {
 	Headings  *HeadingService
 	Habits    *HabitService
 	Tags      *TagService
+	Lists     *ListService
 
 	store storage.Store
 	bus   *bus
@@ -63,6 +64,7 @@ func New(store storage.Store, clock Clock, notifier Notifier) *Core {
 		Reminders: &ReminderService{store: store, clock: clock, notifier: notifier, bus: b},
 		Habits:    &HabitService{store: store, bus: b},
 		Tags:      &TagService{store: store, bus: b},
+		Lists:     &ListService{store: store, clock: clock},
 		store:     store,
 		bus:       b,
 	}

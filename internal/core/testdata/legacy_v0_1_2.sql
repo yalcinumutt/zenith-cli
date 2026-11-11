@@ -86,6 +86,11 @@ INSERT INTO tasks (id, project_id, title, description, status, priority, recurri
   (6, 1, 'Review PR', '', 'InProgress', 1, 'none'),
   (7, NULL, 'Call the bank', '', 'todo', 0, 'none');
 
+-- Legacy free-form dates: 1 planned + due, 5 due only (a time.Time-style string), 7 planned only.
+UPDATE tasks SET planned_date = '2026-03-02', due_date = '2026-03-10' WHERE id = 1;
+UPDATE tasks SET due_date = '2026-03-05 00:00:00 +0000 UTC' WHERE id = 5;
+UPDATE tasks SET planned_date = '2026-03-04 15:04:05.123456789+03:00' WHERE id = 7;
+
 INSERT INTO tags (id, name, color) VALUES (1, 'work', '#0000ff'), (4, 'urgent', '#ff0000');
 INSERT INTO task_tags (task_id, tag_id) VALUES (1, 1), (5, 1), (5, 4);
 

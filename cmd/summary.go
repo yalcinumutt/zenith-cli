@@ -74,8 +74,8 @@ func renderTaskList(tasks []models.Task) {
 		
 		duration := fmt.Sprintf("%dh %dm", t.TotalTime/3600, (t.TotalTime%3600)/60)
 		due := ""
-		if t.DueDate != nil {
-			due = " 📅 " + t.DueDate.Format("02 Jan")
+		if t.Deadline != "" {
+			due = " 📅 " + t.Deadline
 		}
 
 		timerIcon := ""

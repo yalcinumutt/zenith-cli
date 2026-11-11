@@ -24,9 +24,11 @@ type AddTaskInput struct {
 	Title     string
 	ProjectID *int64 // a task is filed in a project or an area, never both
 	AreaID    *int64
-	HeadingID *int64 // implies the heading's project
-	ParentID  *int64 // makes the new task a Subtask of this task
-	DueDate   *time.Time
+	HeadingID *int64      // implies the heading's project
+	ParentID  *int64      // makes the new task a Subtask of this task
+	When      models.When // zero value means anytime
+	Deadline  string      // YYYY-MM-DD, optional
+	Evening   bool        // within Today, show under "This Evening"
 	Priority  models.Priority
 	Recurring string
 }
@@ -63,7 +65,9 @@ func (s *TaskService) Add(in AddTaskInput) (*models.Task, error) {
 		AreaID:    in.AreaID,
 		HeadingID: in.HeadingID,
 		ParentID:  in.ParentID,
-		DueDate:   in.DueDate,
+		When:      in.When,
+		Deadline:  in.Deadline,
+		Evening:   in.Evening,
 		Recurring: in.Recurring,
 	}
 	err := s.run(func(tx storage.Store, ch *changes) error {
@@ -84,6 +88,19 @@ func (s *TaskService) Add(in AddTaskInput) (*models.Task, error) {
 					return err
 				}
 			}
+		}
+		w, err := normalizeWhen(task.When)
+		if err != nil {
+			return err
+		}
+		task.When = w
+		if task.Deadline != "" {
+			if _, err := time.Parse(models.DateLayout, task.Deadline); err != nil {
+				return invalidError(fmt.Sprintf("invalid deadline %q (use YYYY-MM-DD)", task.Deadline))
+			}
+		}
+		if task.Evening && task.When.Kind != models.WhenScheduled {
+			return invalidError("only a scheduled task can go in This Evening")
 		}
 		if err := s.normalizeContainer(tx, task); err != nil {
 			return err
@@ -237,9 +254,40 @@ func (s *TaskService) SetHeading(id int64, headingID *int64) error {
 	})
 }
 
-// Plan sets the day the task is planned for.
-func (s *TaskService) Plan(id int64, day time.Time) error {
-	return s.edit(id, func(t *models.Task) { t.PlannedDate = &day })
+// SetWhen changes when the task is meant to be worked on. Moving it off a
+// scheduled day also clears "This Evening".
+func (s *TaskService) SetWhen(id int64, w models.When) error {
+	w, err := normalizeWhen(w)
+	if err != nil {
+		return err
+	}
+	return s.edit(id, func(t *models.Task) {
+		t.When = w
+		if w.Kind != models.WhenScheduled {
+			t.Evening = false
+		}
+	})
+}
+
+// SetEvening moves a scheduled task into or out of the "This Evening" section.
+func (s *TaskService) SetEvening(id int64, evening bool) error {
+	return s.editTx(id, func(_ storage.Store, t *models.Task) error {
+		if evening && t.When.Kind != models.WhenScheduled {
+			return invalidError("only a scheduled task can go in This Evening")
+		}
+		t.Evening = evening
+		return nil
+	})
+}
+
+// SetDeadline sets the date the task is due, or clears it when date is "".
+func (s *TaskService) SetDeadline(id int64, date string) error {
+	if date != "" {
+		if _, err := time.Parse(models.DateLayout, date); err != nil {
+			return invalidError(fmt.Sprintf("invalid deadline %q (use YYYY-MM-DD)", date))
+		}
+	}
+	return s.edit(id, func(t *models.Task) { t.Deadline = date })
 }
 
 // Delete removes the task together with its Subtasks.
@@ -657,4 +705,36 @@ func (s *TaskService) deleteTasks(tx storage.Store, ch *changes, tasks []models.
 		}
 	}
 	return nil
+}
+
+// normalizeWhen fills the default kind and validates the date.
+func normalizeWhen(w models.When) (models.When, error) {
+	switch w.Kind {
+	case "", models.WhenAnytime:
+		return models.When{Kind: models.WhenAnytime}, nil
+	case models.WhenSomeday:
+		return models.When{Kind: models.WhenSomeday}, nil
+	case models.WhenScheduled:
+		if _, err := time.Parse(models.DateLayout, w.Date); err != nil {
+			return w, invalidError(fmt.Sprintf("invalid date %q (use YYYY-MM-DD)", w.Date))
+		}
+		return w, nil
+	}
+	return w, invalidError(fmt.Sprintf("unknown when %q", w.Kind))
+}
+
+// ParseWhen reads a user-typed When: anytime, today, tomorrow, someday or
+// YYYY-MM-DD. now supplies the meaning of "today".
+func ParseWhen(s string, now time.Time) (models.When, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "anytime", "none", "":
+		return models.When{Kind: models.WhenAnytime}, nil
+	case "someday":
+		return models.When{Kind: models.WhenSomeday}, nil
+	case "today":
+		return models.When{Kind: models.WhenScheduled, Date: now.Format(models.DateLayout)}, nil
+	case "tomorrow":
+		return models.When{Kind: models.WhenScheduled, Date: now.AddDate(0, 0, 1).Format(models.DateLayout)}, nil
+	}
+	return normalizeWhen(models.When{Kind: models.WhenScheduled, Date: strings.TrimSpace(s)})
 }

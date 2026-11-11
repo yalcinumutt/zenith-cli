@@ -3,6 +3,10 @@ package storage
 import (
 	"database/sql"
 	"fmt"
+	"regexp"
+	"time"
+
+	"github.com/yalcinumutt/zenith-cli/internal/models"
 )
 
 func migrate(db *sql.DB) error {
@@ -23,7 +27,8 @@ func migrate(db *sql.DB) error {
 	}
 
 	// 3. Add due_date to tasks if it doesn't exist
-	if !columnExists(db, "tasks", "due_date") {
+	// (Skipped once When/Deadline exist: the columns were migrated away and must not come back.)
+	if !columnExists(db, "tasks", "due_date") && !columnExists(db, "tasks", "when_kind") {
 		_, err := db.Exec("ALTER TABLE tasks ADD COLUMN due_date DATETIME")
 		if err != nil {
 			return fmt.Errorf("failed to add due_date column: %w", err)
@@ -31,7 +36,7 @@ func migrate(db *sql.DB) error {
 	}
 
 	// 4. Add planned_date to tasks if it doesn't exist
-	if !columnExists(db, "tasks", "planned_date") {
+	if !columnExists(db, "tasks", "planned_date") && !columnExists(db, "tasks", "when_kind") {
 		_, err := db.Exec("ALTER TABLE tasks ADD COLUMN planned_date DATE")
 		if err != nil {
 			return fmt.Errorf("failed to add planned_date column: %w", err)
@@ -91,7 +96,12 @@ func migrate(db *sql.DB) error {
 	}
 
 	// 11. Tags are unique by normalized name in the core, not by constraint.
-	return migrateTagsDropUnique(db)
+	if err := migrateTagsDropUnique(db); err != nil {
+		return err
+	}
+
+	// 12. When / Deadline replace planned_date / due_date (ADR 0004).
+	return migrateWhenDeadline(db)
 }
 
 // uuidTables are the tables with an integer `id` handle. The task_tags join
@@ -268,6 +278,101 @@ func migrateTagsDropUnique(db *sql.DB) error {
 	} {
 		if _, err := tx.Exec(stmt); err != nil {
 			return fmt.Errorf("failed to rebuild tags without UNIQUE name: %w", err)
+		}
+	}
+	return tx.Commit()
+}
+
+var datePrefix = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}`)
+
+// legacyDate reduces whatever the old date columns held (a time.Time, or text
+// in several shapes written by earlier versions) to a plain YYYY-MM-DD, or "".
+func legacyDate(v any) string {
+	switch d := v.(type) {
+	case time.Time:
+		return d.Format(models.DateLayout)
+	case string:
+		return datePrefix.FindString(d)
+	case []byte:
+		return datePrefix.FindString(string(d))
+	}
+	return ""
+}
+
+// migrateWhenDeadline maps the free-form legacy dates onto When and Deadline:
+// planned_date becomes scheduled(date) and due_date becomes the Deadline. The
+// old columns are then dropped. Idempotent: it does nothing once they are gone.
+func migrateWhenDeadline(db *sql.DB) error {
+	if !columnExists(db, "tasks", "id") {
+		return nil
+	}
+	for _, c := range []struct{ column, ddl string }{
+		{"when_kind", "TEXT DEFAULT 'anytime'"},
+		{"when_date", "TEXT"},
+		{"deadline", "TEXT"},
+		{"evening", "INTEGER DEFAULT 0"},
+	} {
+		if err := addColumn(db, "tasks", c.column, c.ddl); err != nil {
+			return err
+		}
+	}
+	hasPlanned, hasDue := columnExists(db, "tasks", "planned_date"), columnExists(db, "tasks", "due_date")
+	if !hasPlanned && !hasDue {
+		return nil
+	}
+	plannedExpr, dueExpr := "NULL", "NULL"
+	if hasPlanned {
+		plannedExpr = "planned_date"
+	}
+	if hasDue {
+		dueExpr = "due_date"
+	}
+	rows, err := db.Query("SELECT id, " + plannedExpr + ", " + dueExpr + " FROM tasks")
+	if err != nil {
+		return err
+	}
+	type mapped struct {
+		id           int64
+		planned, due string
+	}
+	var all []mapped
+	for rows.Next() {
+		var id int64
+		var planned, due any
+		if err := rows.Scan(&id, &planned, &due); err != nil {
+			rows.Close()
+			return err
+		}
+		all = append(all, mapped{id, legacyDate(planned), legacyDate(due)})
+	}
+	rows.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, m := range all {
+		kind, date := "anytime", any(nil)
+		if m.planned != "" {
+			kind, date = "scheduled", m.planned
+		}
+		if _, err := tx.Exec("UPDATE tasks SET when_kind = ?, when_date = ?, deadline = ?, evening = 0 WHERE id = ?",
+			kind, date, nullIfEmpty(m.due), m.id); err != nil {
+			return err
+		}
+	}
+	for _, stmt := range []string{"DROP INDEX IF EXISTS idx_tasks_planned_date"} {
+		if _, err := tx.Exec(stmt); err != nil {
+			return err
+		}
+	}
+	// The pool has one connection, so existence was decided before the transaction began.
+	for col, present := range map[string]bool{"planned_date": hasPlanned, "due_date": hasDue} {
+		if present {
+			if _, err := tx.Exec("ALTER TABLE tasks DROP COLUMN " + col); err != nil {
+				return fmt.Errorf("failed to drop tasks.%s: %w", col, err)
+			}
 		}
 	}
 	return tx.Commit()

@@ -35,8 +35,10 @@ CREATE TABLE IF NOT EXISTS tasks (
     description TEXT,
     status TEXT DEFAULT 'open',
     priority INTEGER DEFAULT 0,
-    due_date DATETIME,
-    planned_date DATE,
+    when_kind TEXT DEFAULT 'anytime',
+    when_date TEXT,
+    deadline TEXT,
+    evening INTEGER DEFAULT 0,
     recurring TEXT DEFAULT 'none',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -91,7 +93,6 @@ CREATE TABLE IF NOT EXISTS habit_logs (
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-CREATE INDEX IF NOT EXISTS idx_tasks_planned_date ON tasks(planned_date);
 CREATE INDEX IF NOT EXISTS idx_habit_logs_habit ON habit_logs(habit_id);
 CREATE INDEX IF NOT EXISTS idx_task_time_logs_task ON task_time_logs(task_id);
 

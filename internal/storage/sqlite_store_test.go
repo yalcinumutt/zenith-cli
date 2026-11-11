@@ -97,7 +97,7 @@ func TestMigrate(t *testing.T) {
 	}
 
 	// 3. Verify columns exist
-	columns := []string{"project_id", "priority", "due_date", "planned_date", "recurring"}
+	columns := []string{"project_id", "priority", "when_kind", "when_date", "deadline", "evening", "recurring"}
 	for _, col := range columns {
 		if !columnExists(db, "tasks", col) {
 			t.Errorf("expected column %s to exist after migration", col)

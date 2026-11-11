@@ -25,13 +25,12 @@ var planCmd = &cobra.Command{
 		fmt.Println("Select tasks by ID to add to today's plan (enter 'done' when finished):")
 
 		for _, t := range tasks {
-			if t.Status == models.StatusOpen && t.PlannedDate == nil {
+			if t.Status == models.StatusOpen && t.ParentID == nil && t.When.Kind != models.WhenScheduled {
 				fmt.Printf("[%d] %s\n", t.ID, t.Title)
 			}
 		}
 
 		var input string
-		today := time.Now()
 		for {
 			fmt.Print("> ")
 			fmt.Scanln(&input)
@@ -47,7 +46,7 @@ var planCmd = &cobra.Command{
 
 			for i := range tasks {
 				if tasks[i].ID == id {
-					if err := app.Tasks.Plan(id, today); err != nil {
+					if err := app.Tasks.SetWhen(id, models.When{Kind: models.WhenScheduled, Date: time.Now().Format(models.DateLayout)}); err != nil {
 						fmt.Printf("Error updating task %d: %v\n", id, err)
 					} else {
 						fmt.Printf("Added '%s' to today's plan!\n", tasks[i].Title)

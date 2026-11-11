@@ -282,3 +282,12 @@ func TestLegacyTasksCanBecomeSubtasks(t *testing.T) {
 		t.Errorf("parent status = %q, want completed", p.Status)
 	}
 }
+
+func rawDB(t *testing.T, path string) *sql.DB {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
