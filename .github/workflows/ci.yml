@@ -42,7 +42,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Linux is pinned: ubuntu-latest is now 26.04, whose apt mirror on the
+        # runners stalls on amd64v3 packages. 24.04 ships GTK 4 and WebKitGTK 6.0.
+        os: [ubuntu-24.04, macos-latest, windows-latest]
     defaults:
       run:
         shell: bash
