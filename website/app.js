@@ -89,3 +89,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Run first demo command on load
     typeCommand('add');
 });
+
+// Desktop preview: light / dark toggle
+document.addEventListener('DOMContentLoaded', () => {
+    const win = document.getElementById('app-window');
+    const toggles = document.querySelectorAll('.mock-toggle');
+    toggles.forEach((btn) => btn.addEventListener('click', () => {
+        win.classList.toggle('theme-dark', btn.dataset.theme === 'dark');
+        win.classList.toggle('theme-light', btn.dataset.theme !== 'dark');
+        toggles.forEach((b) => b.classList.toggle('active', b === btn));
+    }));
+});

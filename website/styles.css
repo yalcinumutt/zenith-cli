@@ -64,8 +64,9 @@ body {
     letter-spacing: -0.5px;
 }
 
-.logo-icon {
-    font-size: 1.5rem;
+.logo-mark {
+    width: 32px;
+    height: 32px;
     filter: drop-shadow(0 0 8px var(--primary-glow));
 }
 
@@ -318,6 +319,77 @@ span {
     line-height: 1.6;
     font-size: 0.95rem;
 }
+
+/* Desktop App Showcase */
+.desktop-section {
+    padding: 6rem 5%;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+}
+.desktop-head { text-align: center; }
+.desktop-head .badge { display: inline-block; }
+.mock-controls { display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem; }
+.mock-toggle {
+    background: rgba(255,255,255,0.04); color: var(--text-muted);
+    border: 1px solid var(--border-color); border-radius: 99px;
+    padding: 0.4rem 1.1rem; font: 600 0.85rem var(--font-sans); cursor: pointer;
+}
+.mock-toggle.active { background: var(--primary); color: #fff; border-color: transparent; }
+
+/* The mock uses the real desktop design tokens */
+.app-window {
+    --bg:#fff; --sidebar:#f5f5f4; --fg:#1c1917; --muted:#5f5b57; --line:#e7e5e4;
+    --acc:#0369a1; --selected:#e0f2fe; --hover:#f0efee; --danger:#b91c1c;
+    max-width: 980px; margin: 0 auto; border-radius: 12px; overflow: hidden;
+    background: var(--bg); color: var(--fg); border: 1px solid var(--line);
+    box-shadow: 0 30px 70px rgba(0,0,0,0.55), 0 0 40px var(--primary-glow);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    transition: background .25s, color .25s;
+}
+.app-window.theme-dark {
+    --bg:#171717; --sidebar:#1f1f1e; --fg:#f5f5f4; --muted:#a8a29e; --line:#3a3a38;
+    --acc:#38bdf8; --selected:#0b2f45; --hover:#2a2a29; --danger:#f87171;
+}
+.app-titlebar { display:flex; align-items:center; gap:.5rem; padding:.7rem 1rem; background: var(--sidebar); border-bottom:1px solid var(--line); }
+.app-title { margin: 0 auto; font-size:.8rem; color: var(--muted); }
+.app-body { display:grid; grid-template-columns: 230px 1fr; min-height: 430px; }
+.app-sidebar { background: var(--sidebar); border-right:1px solid var(--line); padding: 1rem .75rem; font-size: 13px; display:flex; flex-direction:column; gap:2px; }
+.side-item { display:flex; align-items:center; gap:.6rem; padding:.4rem .6rem; border-radius:6px; }
+.side-item.active { background: var(--selected); font-weight:600; }
+.side-item b { margin-left:auto; font-weight:400; font-size:12px; color: var(--muted); }
+.side-label { margin:1rem 0 .2rem; padding:0 .6rem; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color: var(--muted); }
+.si { width:14px; height:14px; border-radius:4px; display:inline-block; flex:none; }
+.si.blue { background: var(--acc); } .si.amber { background:#d97706; } .si.gray { background: var(--muted); opacity:.6; }
+.si.folder { background: var(--acc); opacity:.75; border-radius:3px 6px 3px 3px; }
+.side-foot { margin-top:auto; padding:.6rem .6rem 0; font-size:12px; color: var(--muted); border-top:1px solid var(--line); }
+.beta-pill { background: var(--selected); color: var(--acc); font-size:10px; font-weight:700; text-transform:uppercase; padding:1px 6px; border-radius:99px; }
+.app-main { padding: 1.75rem 2rem; position:relative; }
+.app-h { font-size:1.6rem; margin-bottom:1rem; display:flex; gap:.5rem; align-items:center; color: var(--fg); }
+.app-h .star { color:#d97706; }
+.app-sub { margin: 1.5rem 0 .5rem; font-size:.95rem; color: var(--fg); }
+.task-list { list-style:none; }
+.task-list li { display:flex; align-items:center; gap:.75rem; padding:.55rem .25rem; border-bottom:1px solid var(--line); font-size:14px; }
+.cb { width:16px; height:16px; border:1.5px solid var(--muted); border-radius:50%; flex:none; }
+.cb.done { background: var(--acc); border-color: var(--acc); box-shadow: inset 0 0 0 3px var(--bg); }
+.t { flex:1; color: var(--fg); }
+.t.done { text-decoration: line-through; color: var(--muted); }
+.t small { display:block; font-size:12px; color: var(--muted); margin-top:2px; }
+.tag { font-style:normal; font-size:11px; background: var(--selected); color: var(--acc); padding:1px 8px; border-radius:99px; }
+.due { font-style:normal; font-size:12px; color: var(--muted); }
+.due.late { color: var(--danger); font-weight:600; }
+.palette { margin-top:1.5rem; width:fit-content; margin-left:auto; background: var(--bg); border:1px solid var(--line); border-radius:8px; padding:.55rem .8rem; font-size:12px; color: var(--muted); box-shadow:0 10px 25px rgba(0,0,0,.25); }
+.palette span { background: var(--hover); color: var(--fg); padding:1px 6px; border-radius:4px; margin-right:.4rem; font-weight:600; }
+.desktop-features { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap:1.25rem; margin: 3.5rem 0 2.5rem; }
+.d-feature { background: var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:1.5rem; }
+.d-feature h4 { font-size:1.05rem; margin-bottom:.5rem; }
+.d-feature p { color: var(--text-muted); font-size:.92rem; line-height:1.55; }
+.d-feature code, .dl-note code { font-family: var(--font-mono); color: var(--accent); }
+.download-row { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:1rem; }
+.dl-card { display:flex; flex-direction:column; gap:.25rem; text-decoration:none; color:#fff; padding:1.25rem 1.5rem; border-radius:12px; border:1px solid var(--border-color); background: rgba(125,86,244,.08); transition: all .2s; }
+.dl-card:hover { transform: translateY(-3px); border-color: var(--border-focus); background: rgba(125,86,244,.16); }
+.dl-card span { color: var(--text-muted); font-size:.85rem; }
+.dl-note { text-align:center; color: var(--text-dim); font-size:.85rem; margin-top:1rem; }
 
 /* Interactive Demo Section */
 .demo-section {
@@ -680,6 +752,10 @@ footer p {
     .install-options {
         grid-template-columns: 1fr;
     }
+    .app-body { grid-template-columns: 1fr; }
+    .app-sidebar { display: none; }
+    .app-main { padding: 1.25rem; }
+    .palette { position: static; margin-top: 1.25rem; }
 }
 
 /* Terminal Simulator ANSI Highlighter Classes */
@@ -690,3 +766,5 @@ footer p {
 .t-magenta { color: var(--accent); font-weight: bold; }
 .t-gray { color: var(--text-dim); }
 
+
+.nav-links a.btn-primary-sm { color: #fff; }

@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zenith CLI - Ultimate Terminal Productivity Suite</title>
-    <meta name="description" content="Zenith CLI is a futuristic, highly customizable command line productivity tool featuring task management, habit tracking, TUI dashboards, local Ollama / LM Studio AI integration, and scheduled timers.">
+    <title>Zenith - Tasks, Habits &amp; Focus for the Terminal and Desktop</title>
+    <meta name="description" content="Zenith is a CLI, terminal dashboard and desktop app over one local database. Zenith CLI is a futuristic, highly customizable command line productivity tool featuring task management, habit tracking, TUI dashboards, local Ollama / LM Studio AI integration, and scheduled timers.">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,11 +16,12 @@
 <body>
     <header class="navbar">
         <div class="logo">
-            <span class="logo-icon">⚡</span>
-            <span class="logo-text">Zenith CLI</span>
+            <img class="logo-mark" src="assets/logo.svg" alt="" width="32" height="32">
+            <span class="logo-text">Zenith</span>
         </div>
         <nav class="nav-links">
             <a href="#features">Features</a>
+            <a href="#desktop">Desktop App</a>
             <a href="#demo">Interactive Demo</a>
             <a href="#tui">TUI Dashboard</a>
             <a href="#installation" class="btn-primary-sm">Get Started</a>
@@ -30,13 +32,13 @@
         <!-- Hero Section -->
         <section class="hero">
             <div class="hero-content">
-                <div class="badge">v0.1.0 Release</div>
-                <h1>Take control of your focus, straight from the <span>terminal</span>.</h1>
-                <p class="hero-subtitle">A futuristic terminal productivity suite combining habit tracking, time logs, interactive TUI, local Ollama/LM Studio AI feedback, and scheduled alerts in a single monorepo Go app.</p>
+                <div class="badge">CLI v0.1.0 · Desktop beta</div>
+                <h1>Find your zenith. <span>Terminal or desktop.</span></h1>
+                <p class="hero-subtitle">Tasks, habits, projects and time tracking through a CLI, a terminal dashboard and a desktop app, all on one local database. Local Ollama/LM Studio AI feedback and scheduled reminders included.</p>
                 
                 <div class="hero-actions">
                     <a href="#demo" class="btn-primary" id="btn-see-demo">See Live Demo</a>
-                    <a href="#installation" class="btn-secondary" id="btn-view-install">Install Guide</a>
+                    <a href="#desktop" class="btn-secondary" id="btn-view-desktop">Get the Desktop App</a>
                 </div>
             </div>
             
@@ -110,6 +112,76 @@ Flags:
             </div>
         </section>
 
+
+        <!-- Desktop App Showcase -->
+        <section id="desktop" class="desktop-section">
+            <div class="desktop-head">
+                <div class="badge">Desktop app · Beta</div>
+                <h2 class="section-title">The same tasks, now with a window</h2>
+                <p class="section-subtitle">Zenith Desktop reads and writes the same local database as the CLI and the TUI. Add a task in the terminal, tick it off on your desktop.</p>
+            </div>
+
+            <div class="mock-controls" role="group" aria-label="Preview theme">
+                <button class="mock-toggle active" data-theme="light" id="mock-light" type="button">Light</button>
+                <button class="mock-toggle" data-theme="dark" id="mock-dark" type="button">Dark</button>
+            </div>
+
+            <div class="app-window theme-light" id="app-window" aria-label="Zenith desktop app preview">
+                <div class="app-titlebar">
+                    <span class="terminal-dot red"></span><span class="terminal-dot yellow"></span><span class="terminal-dot green"></span>
+                    <span class="app-title">Zenith</span>
+                </div>
+                <div class="app-body">
+                    <aside class="app-sidebar">
+                        <div class="side-item"><i class="si blue"></i>Inbox<b>3</b></div>
+                        <div class="side-item active"><i class="si amber"></i>Today<b>5</b></div>
+                        <div class="side-item"><i class="si blue"></i>Upcoming<b>4</b></div>
+                        <div class="side-item"><i class="si blue"></i>Anytime</div>
+                        <div class="side-item"><i class="si gray"></i>Someday</div>
+                        <div class="side-item"><i class="si gray"></i>Logbook</div>
+                        <div class="side-label">Work</div>
+                        <div class="side-item"><i class="si folder"></i>Zenith launch<b>7</b></div>
+                        <div class="side-item"><i class="si folder"></i>Client: Summit<b>2</b></div>
+                        <div class="side-label">Health</div>
+                        <div class="side-item"><i class="si folder"></i>Marathon plan<b>3</b></div>
+                        <div class="side-foot">About <span class="beta-pill">Beta</span></div>
+                    </aside>
+                    <div class="app-main">
+                        <h3 class="app-h"><span class="star">★</span> Today</h3>
+                        <ul class="task-list">
+                            <li><span class="cb done"></span><span class="t done">Review pull request #41</span><em class="tag">code</em></li>
+                            <li><span class="cb"></span><span class="t">Write release notes for desktop beta</span><em class="tag">launch</em><em class="due">Today</em></li>
+                            <li><span class="cb"></span><span class="t">30 min deep work<small>Pomodoro · reminder 10:30</small></span><em class="tag">focus</em></li>
+                            <li><span class="cb"></span><span class="t">Plan next sprint<small>2 of 5 subtasks</small></span></li>
+                            <li><span class="cb"></span><span class="t">Morning run<small>↻ Every day</small></span><em class="tag">health</em></li>
+                        </ul>
+                        <h4 class="app-sub">This Evening</h4>
+                        <ul class="task-list">
+                            <li><span class="cb"></span><span class="t">Read 20 pages</span><em class="tag">habit</em></li>
+                            <li><span class="cb"></span><span class="t">Pay invoice</span><em class="due late">Overdue</em></li>
+                        </ul>
+                        <div class="palette" aria-hidden="true"><span>⌘K</span> Search tasks, jump to a project, run a command…</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="desktop-features">
+                <div class="d-feature"><h4>Six smart lists</h4><p>Inbox, Today, Upcoming, Anytime, Someday and a Logbook of everything you finished.</p></div>
+                <div class="d-feature"><h4>Areas and projects</h4><p>Group projects under long-lived Areas like Work or Health, with headings and subtasks.</p></div>
+                <div class="d-feature"><h4>Reminders and repeats</h4><p>Recurring tasks and reminders delivered as native notifications.</p></div>
+                <div class="d-feature"><h4>Command palette</h4><p>Press <code>⌘K</code> to search, jump anywhere and act without leaving the keyboard.</p></div>
+                <div class="d-feature"><h4>Light and dark</h4><p>An accessible palette checked for contrast in both themes.</p></div>
+                <div class="d-feature"><h4>One database</h4><p>Local-first. CLI, TUI and desktop share <code>~/.zenith/data.db</code>.</p></div>
+            </div>
+
+            <div class="download-row">
+                <a class="dl-card" href="https://github.com/yalcinumutt/zenith-cli/releases" target="_blank" rel="noopener" id="dl-macos"><strong>macOS</strong><span>.dmg · Apple Silicon &amp; Intel</span></a>
+                <a class="dl-card" href="https://github.com/yalcinumutt/zenith-cli/releases" target="_blank" rel="noopener" id="dl-windows"><strong>Windows</strong><span>.exe installer</span></a>
+                <a class="dl-card" href="https://github.com/yalcinumutt/zenith-cli/releases" target="_blank" rel="noopener" id="dl-linux"><strong>Linux</strong><span>.AppImage · .deb · .rpm</span></a>
+            </div>
+            <p class="dl-note">Desktop builds are published as <code>desktop-v*</code> releases on GitHub. The desktop app is in beta.</p>
+        </section>
+
         <!-- Interactive Terminal Simulator -->
         <section id="demo" class="demo-section">
             <h2 class="section-title">Try Zenith interactively</h2>
@@ -179,7 +251,7 @@ Flags:
 
         <!-- Installation Section -->
         <section id="installation" class="install-section">
-            <h2 class="section-title">Install Zenith CLI</h2>
+            <h2 class="section-title">Install the Zenith CLI</h2>
             <p class="section-subtitle">Get started in seconds on macOS, Linux, or Windows.</p>
             
             <div class="install-options">
@@ -209,7 +281,7 @@ Flags:
     </main>
 
     <footer>
-        <p>&copy; 2026 Zenith CLI. Built for developers who love the terminal.</p>
+        <p>&copy; 2026 Zenith. Built for people who love focus, in the terminal and on the desktop.</p>
     </footer>
 
     <script src="app.js"></script>
