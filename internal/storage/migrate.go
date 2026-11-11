@@ -75,6 +75,43 @@ func migrate(db *sql.DB) error {
 	}
 	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_task_history_task ON task_history(task_id)")
 
+	// 8. Sync identity: a uuid on every entity table (ADR 0003).
+	return migrateUUIDs(db)
+}
+
+// uuidTables are the tables with an integer `id` handle. The task_tags join
+// table has no id of its own; sync identifies its rows by (task uuid, tag uuid).
+var uuidTables = []string{
+	"projects", "tasks", "tags", "task_time_logs",
+	"habits", "habit_logs", "scheduled_timers", "task_history",
+}
+
+// uuidSQL generates a random version 4 UUID inside SQLite so a whole table can
+// be backfilled with one statement (atomic, and safe if two processes migrate
+// at once). randomblob is evaluated per row.
+const uuidSQL = `lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(hex(randomblob(2)), 2) || '-' || hex(randomblob(6)))`
+
+// migrateUUIDs is idempotent: it adds the column only when missing, backfills
+// only rows without a uuid, and keeps existing uuids untouched.
+func migrateUUIDs(db *sql.DB) error {
+	for _, table := range uuidTables {
+		if !columnExists(db, table, "id") {
+			continue // table not created yet (partial legacy database)
+		}
+		if !columnExists(db, table, "uuid") {
+			_, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN uuid TEXT", table))
+			// A concurrent process may have added it between the check and the ALTER.
+			if err != nil && !columnExists(db, table, "uuid") {
+				return fmt.Errorf("failed to add uuid column to %s: %w", table, err)
+			}
+		}
+		if _, err := db.Exec(fmt.Sprintf("UPDATE %s SET uuid = %s WHERE uuid IS NULL OR uuid = ''", table, uuidSQL)); err != nil {
+			return fmt.Errorf("failed to backfill uuids in %s: %w", table, err)
+		}
+		if _, err := db.Exec(fmt.Sprintf("CREATE UNIQUE INDEX IF NOT EXISTS idx_%s_uuid ON %s(uuid)", table, table)); err != nil {
+			return fmt.Errorf("failed to index uuids in %s: %w", table, err)
+		}
+	}
 	return nil
 }
 

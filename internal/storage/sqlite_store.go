@@ -137,7 +137,7 @@ func ensureDefaultProject(db *sql.DB) error {
 	}
 
 	if count == 0 {
-		_, err := db.Exec("INSERT INTO projects (name, description) VALUES (?, ?)", "Anytime", "Default project for tasks")
+		_, err := db.Exec("INSERT INTO projects (uuid, name, description) VALUES (?, ?, ?)", newUUID(), "Anytime", "Default project for tasks")
 		if err != nil {
 			return err
 		}
@@ -146,8 +146,9 @@ func ensureDefaultProject(db *sql.DB) error {
 }
 
 func (s *SQLiteStore) AddTask(task *models.Task) error {
-	query := `INSERT INTO tasks (project_id, title, description, status, priority, due_date, planned_date, recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-	res, err := s.q.Exec(query, task.ProjectID, task.Title, task.Description, task.Status, task.Priority, task.DueDate, task.PlannedDate, task.Recurring)
+	task.UUID = newUUID()
+	query := `INSERT INTO tasks (uuid, project_id, title, description, status, priority, due_date, planned_date, recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	res, err := s.q.Exec(query, task.UUID, task.ProjectID, task.Title, task.Description, task.Status, task.Priority, task.DueDate, task.PlannedDate, task.Recurring)
 	if err != nil {
 		return fmt.Errorf("could not insert task: %w", err)
 	}
@@ -163,7 +164,7 @@ func (s *SQLiteStore) AddTask(task *models.Task) error {
 
 const taskSelect = `
 		SELECT 
-			t.id, t.project_id, t.title, t.description, t.status, t.priority, t.due_date, t.planned_date, t.recurring, t.created_at, t.updated_at,
+			t.id, t.uuid, t.project_id, t.title, t.description, t.status, t.priority, t.due_date, t.planned_date, t.recurring, t.created_at, t.updated_at,
 			EXISTS(SELECT 1 FROM task_time_logs WHERE task_id = t.id AND end_time IS NULL) as is_running,
 			COALESCE((SELECT SUM(strftime('%s', COALESCE(end_time, CURRENT_TIMESTAMP)) - strftime('%s', start_time)) FROM task_time_logs WHERE task_id = t.id), 0) as total_time
 		FROM tasks t`
@@ -177,7 +178,7 @@ func (s *SQLiteStore) queryTasks(where string, args ...any) ([]models.Task, erro
 	var tasks []models.Task
 	for rows.Next() {
 		var t models.Task
-		err := rows.Scan(&t.ID, &t.ProjectID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.DueDate, &t.PlannedDate, &t.Recurring, &t.CreatedAt, &t.UpdatedAt, &t.IsRunning, &t.TotalTime)
+		err := rows.Scan(&t.ID, &t.UUID, &t.ProjectID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.DueDate, &t.PlannedDate, &t.Recurring, &t.CreatedAt, &t.UpdatedAt, &t.IsRunning, &t.TotalTime)
 		if err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("could not scan task: %w", err)
@@ -238,8 +239,9 @@ func (s *SQLiteStore) DeleteTask(id int64) error {
 }
 
 func (s *SQLiteStore) AddHabit(habit *models.Habit) error {
-	query := `INSERT INTO habits (name, description, frequency) VALUES (?, ?, ?)`
-	res, err := s.q.Exec(query, habit.Name, habit.Description, habit.Frequency)
+	habit.UUID = newUUID()
+	query := `INSERT INTO habits (uuid, name, description, frequency) VALUES (?, ?, ?, ?)`
+	res, err := s.q.Exec(query, habit.UUID, habit.Name, habit.Description, habit.Frequency)
 	if err != nil {
 		return err
 	}
@@ -252,7 +254,7 @@ func (s *SQLiteStore) AddHabit(habit *models.Habit) error {
 }
 
 func (s *SQLiteStore) GetHabits() ([]models.Habit, error) {
-	rows, err := s.q.Query("SELECT id, name, description, frequency, created_at, updated_at FROM habits")
+	rows, err := s.q.Query("SELECT id, uuid, name, description, frequency, created_at, updated_at FROM habits")
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +263,7 @@ func (s *SQLiteStore) GetHabits() ([]models.Habit, error) {
 	var habits []models.Habit
 	for rows.Next() {
 		var h models.Habit
-		if err := rows.Scan(&h.ID, &h.Name, &h.Description, &h.Frequency, &h.CreatedAt, &h.UpdatedAt); err != nil {
+		if err := rows.Scan(&h.ID, &h.UUID, &h.Name, &h.Description, &h.Frequency, &h.CreatedAt, &h.UpdatedAt); err != nil {
 			return nil, err
 		}
 		habits = append(habits, h)
@@ -271,8 +273,8 @@ func (s *SQLiteStore) GetHabits() ([]models.Habit, error) {
 
 func (s *SQLiteStore) GetHabit(id int64) (*models.Habit, error) {
 	var h models.Habit
-	err := s.q.QueryRow("SELECT id, name, description, frequency, created_at, updated_at FROM habits WHERE id = ?", id).
-		Scan(&h.ID, &h.Name, &h.Description, &h.Frequency, &h.CreatedAt, &h.UpdatedAt)
+	err := s.q.QueryRow("SELECT id, uuid, name, description, frequency, created_at, updated_at FROM habits WHERE id = ?", id).
+		Scan(&h.ID, &h.UUID, &h.Name, &h.Description, &h.Frequency, &h.CreatedAt, &h.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -283,12 +285,13 @@ func (s *SQLiteStore) GetHabit(id int64) (*models.Habit, error) {
 }
 
 func (s *SQLiteStore) LogHabit(habitID int64) error {
-	_, err := s.q.Exec("INSERT INTO habit_logs (habit_id) VALUES (?)", habitID)
+	_, err := s.q.Exec("INSERT INTO habit_logs (uuid, habit_id) VALUES (?, ?)", newUUID(), habitID)
 	return err
 }
 
 func (s *SQLiteStore) AddProject(project *models.Project) error {
-	res, err := s.q.Exec("INSERT INTO projects (name, description) VALUES (?, ?)", project.Name, project.Description)
+	project.UUID = newUUID()
+	res, err := s.q.Exec("INSERT INTO projects (uuid, name, description) VALUES (?, ?, ?)", project.UUID, project.Name, project.Description)
 	if err != nil {
 		return err
 	}
@@ -301,7 +304,7 @@ func (s *SQLiteStore) AddProject(project *models.Project) error {
 }
 
 func (s *SQLiteStore) GetProjects() ([]models.Project, error) {
-	rows, err := s.q.Query("SELECT id, name, description, created_at, updated_at FROM projects")
+	rows, err := s.q.Query("SELECT id, uuid, name, description, created_at, updated_at FROM projects")
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +313,7 @@ func (s *SQLiteStore) GetProjects() ([]models.Project, error) {
 	var projects []models.Project
 	for rows.Next() {
 		var p models.Project
-		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.UUID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
 		projects = append(projects, p)
@@ -324,7 +327,7 @@ func (s *SQLiteStore) SearchTasks(query string) ([]models.Task, error) {
 }
 
 func (s *SQLiteStore) SearchHabits(query string) ([]models.Habit, error) {
-	sqlQuery := `SELECT id, name, description, frequency, created_at, updated_at FROM habits WHERE name LIKE ? OR description LIKE ?`
+	sqlQuery := `SELECT id, uuid, name, description, frequency, created_at, updated_at FROM habits WHERE name LIKE ? OR description LIKE ?`
 	searchTerm := "%" + query + "%"
 	rows, err := s.q.Query(sqlQuery, searchTerm, searchTerm)
 	if err != nil {
@@ -335,7 +338,7 @@ func (s *SQLiteStore) SearchHabits(query string) ([]models.Habit, error) {
 	var habits []models.Habit
 	for rows.Next() {
 		var h models.Habit
-		if err := rows.Scan(&h.ID, &h.Name, &h.Description, &h.Frequency, &h.CreatedAt, &h.UpdatedAt); err != nil {
+		if err := rows.Scan(&h.ID, &h.UUID, &h.Name, &h.Description, &h.Frequency, &h.CreatedAt, &h.UpdatedAt); err != nil {
 			return nil, err
 		}
 		habits = append(habits, h)
@@ -345,7 +348,7 @@ func (s *SQLiteStore) SearchHabits(query string) ([]models.Habit, error) {
 
 // OpenTimeLog starts a time log for the task at the given instant.
 func (s *SQLiteStore) OpenTimeLog(taskID int64, start time.Time) error {
-	_, err := s.q.Exec(`INSERT INTO task_time_logs (task_id, start_time) VALUES (?, ?)`, taskID, formatTime(start))
+	_, err := s.q.Exec(`INSERT INTO task_time_logs (uuid, task_id, start_time) VALUES (?, ?, ?)`, newUUID(), taskID, formatTime(start))
 	return err
 }
 
@@ -367,18 +370,12 @@ func (s *SQLiteStore) CloseOpenTimeLog(taskID int64, end time.Time) (secs int64,
 }
 
 func (s *SQLiteStore) AddTag(tag *models.Tag) error {
-	res, err := s.q.Exec(`INSERT INTO tags (name, color) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET color = excluded.color`, tag.Name, tag.Color)
+	// An existing tag keeps its uuid; only the color is refreshed.
+	_, err := s.q.Exec(`INSERT INTO tags (uuid, name, color) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET color = excluded.color`, newUUID(), tag.Name, tag.Color)
 	if err != nil {
 		return err
 	}
-	id, err := res.LastInsertId()
-	if err == nil && id != 0 {
-		tag.ID = id
-	} else if id == 0 {
-		// If it was an update or already exists, fetch the ID
-		err = s.q.QueryRow(`SELECT id FROM tags WHERE name = ?`, tag.Name).Scan(&tag.ID)
-	}
-	return err
+	return s.q.QueryRow(`SELECT id, uuid FROM tags WHERE name = ?`, tag.Name).Scan(&tag.ID, &tag.UUID)
 }
 
 func (s *SQLiteStore) AttachTagToTask(taskID, tagID int64) error {
@@ -388,7 +385,7 @@ func (s *SQLiteStore) AttachTagToTask(taskID, tagID int64) error {
 
 func (s *SQLiteStore) GetTagsForTask(taskID int64) ([]models.Tag, error) {
 	rows, err := s.q.Query(`
-		SELECT t.id, t.name, t.color, t.created_at 
+		SELECT t.id, t.uuid, t.name, t.color, t.created_at 
 		FROM tags t
 		JOIN task_tags tt ON t.id = tt.tag_id
 		WHERE tt.task_id = ?`, taskID)
@@ -400,7 +397,7 @@ func (s *SQLiteStore) GetTagsForTask(taskID int64) ([]models.Tag, error) {
 	var tags []models.Tag
 	for rows.Next() {
 		var t models.Tag
-		if err := rows.Scan(&t.ID, &t.Name, &t.Color, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.UUID, &t.Name, &t.Color, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		tags = append(tags, t)
@@ -409,8 +406,9 @@ func (s *SQLiteStore) GetTagsForTask(taskID int64) ([]models.Tag, error) {
 }
 
 func (s *SQLiteStore) AddScheduledTimer(timer *models.ScheduledTimer) error {
-	query := `INSERT INTO scheduled_timers (task_id, title, trigger_time, status) VALUES (?, ?, ?, ?)`
-	res, err := s.q.Exec(query, timer.TaskID, timer.Title, timer.TriggerTime, "pending")
+	timer.UUID = newUUID()
+	query := `INSERT INTO scheduled_timers (uuid, task_id, title, trigger_time, status) VALUES (?, ?, ?, ?, ?)`
+	res, err := s.q.Exec(query, timer.UUID, timer.TaskID, timer.Title, timer.TriggerTime, "pending")
 	if err != nil {
 		return err
 	}
@@ -423,7 +421,7 @@ func (s *SQLiteStore) AddScheduledTimer(timer *models.ScheduledTimer) error {
 }
 
 func (s *SQLiteStore) GetPendingScheduledTimers() ([]models.ScheduledTimer, error) {
-	query := `SELECT id, task_id, title, trigger_time, status, created_at FROM scheduled_timers WHERE status = 'pending'`
+	query := `SELECT id, uuid, task_id, title, trigger_time, status, created_at FROM scheduled_timers WHERE status = 'pending'`
 	rows, err := s.q.Query(query)
 	if err != nil {
 		return nil, err
@@ -432,7 +430,7 @@ func (s *SQLiteStore) GetPendingScheduledTimers() ([]models.ScheduledTimer, erro
 	var timers []models.ScheduledTimer
 	for rows.Next() {
 		var t models.ScheduledTimer
-		err := rows.Scan(&t.ID, &t.TaskID, &t.Title, &t.TriggerTime, &t.Status, &t.CreatedAt)
+		err := rows.Scan(&t.ID, &t.UUID, &t.TaskID, &t.Title, &t.TriggerTime, &t.Status, &t.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -455,8 +453,9 @@ func (s *SQLiteStore) AddTaskHistory(history *models.TaskHistory) error {
 	if !history.Timestamp.IsZero() {
 		stamp = formatTime(history.Timestamp)
 	}
-	query := `INSERT INTO task_history (task_id, action, details, timestamp) VALUES (?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))`
-	res, err := s.q.Exec(query, history.TaskID, history.Action, history.Details, stamp)
+	query := `INSERT INTO task_history (uuid, task_id, action, details, timestamp) VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))`
+	history.UUID = newUUID()
+	res, err := s.q.Exec(query, history.UUID, history.TaskID, history.Action, history.Details, stamp)
 	if err != nil {
 		return err
 	}
@@ -469,7 +468,7 @@ func (s *SQLiteStore) AddTaskHistory(history *models.TaskHistory) error {
 }
 
 func (s *SQLiteStore) GetTaskHistory(taskID int64) ([]models.TaskHistory, error) {
-	query := `SELECT id, task_id, action, details, timestamp FROM task_history WHERE task_id = ? ORDER BY id DESC`
+	query := `SELECT id, uuid, task_id, action, details, timestamp FROM task_history WHERE task_id = ? ORDER BY id DESC`
 	rows, err := s.q.Query(query, taskID)
 	if err != nil {
 		return nil, err
@@ -478,7 +477,7 @@ func (s *SQLiteStore) GetTaskHistory(taskID int64) ([]models.TaskHistory, error)
 	var history []models.TaskHistory
 	for rows.Next() {
 		var h models.TaskHistory
-		err := rows.Scan(&h.ID, &h.TaskID, &h.Action, &h.Details, &h.Timestamp)
+		err := rows.Scan(&h.ID, &h.UUID, &h.TaskID, &h.Action, &h.Details, &h.Timestamp)
 		if err != nil {
 			return nil, err
 		}
