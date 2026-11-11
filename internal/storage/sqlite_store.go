@@ -428,9 +428,13 @@ func (s *SQLiteStore) GetPendingScheduledTimers() ([]models.ScheduledTimer, erro
 	return timers, nil
 }
 
-func (s *SQLiteStore) MarkScheduledTimerTriggered(id int64) error {
-	_, err := s.q.Exec(`UPDATE scheduled_timers SET status = 'triggered' WHERE id = ?`, id)
-	return err
+func (s *SQLiteStore) ClaimScheduledTimer(id int64) (bool, error) {
+	res, err := s.q.Exec(`UPDATE scheduled_timers SET status = 'triggered' WHERE id = ? AND status = 'pending'`, id)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
 }
 
 func (s *SQLiteStore) AddTaskHistory(history *models.TaskHistory) error {

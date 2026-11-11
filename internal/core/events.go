@@ -55,8 +55,7 @@ type ListsInvalidated struct {
 	Keys []string
 }
 
-// ReminderDue is published when a reminder fires. It is part of the surface
-// now so subscribers can be written against it; the reminders work publishes it.
+// ReminderDue is published by Tick when a reminder fires in this process.
 type ReminderDue struct {
 	ReminderID int64
 }

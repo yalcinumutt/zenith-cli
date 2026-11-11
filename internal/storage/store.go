@@ -47,7 +47,9 @@ type Store interface {
 	// Scheduled Timers
 	AddScheduledTimer(timer *models.ScheduledTimer) error
 	GetPendingScheduledTimers() ([]models.ScheduledTimer, error)
-	MarkScheduledTimerTriggered(id int64) error
+	// ClaimScheduledTimer flips a pending timer to triggered in one guarded
+	// UPDATE and reports whether this caller won; only one caller ever does.
+	ClaimScheduledTimer(id int64) (bool, error)
 
 	// Task History
 	AddTaskHistory(history *models.TaskHistory) error

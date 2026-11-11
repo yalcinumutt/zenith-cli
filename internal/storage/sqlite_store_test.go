@@ -140,9 +140,12 @@ func TestSQLiteStore_ScheduledTimers(t *testing.T) {
 		t.Errorf("expected 1 pending timer with matching title, got %d", len(timers))
 	}
 
-	// Mark triggered
-	if err := db.MarkScheduledTimerTriggered(timer.ID); err != nil {
-		t.Fatalf("failed to mark timer triggered: %v", err)
+	// Claim: the first caller wins, later ones do not
+	if won, err := db.ClaimScheduledTimer(timer.ID); err != nil || !won {
+		t.Fatalf("first claim = %v, %v; want true, nil", won, err)
+	}
+	if won, err := db.ClaimScheduledTimer(timer.ID); err != nil || won {
+		t.Fatalf("second claim = %v, %v; want false, nil", won, err)
 	}
 
 	// Verify no pending timers remain

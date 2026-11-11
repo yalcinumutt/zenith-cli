@@ -32,7 +32,8 @@ func (NopNotifier) Notify(string, string) error { return nil }
 
 // Core bundles the services over one store, clock and notifier.
 type Core struct {
-	Tasks *TaskService
+	Tasks     *TaskService
+	Reminders *ReminderService
 
 	store storage.Store
 	bus   *bus
@@ -49,8 +50,9 @@ func New(store storage.Store, clock Clock, notifier Notifier) *Core {
 	}
 	b := &bus{}
 	return &Core{
-		Tasks: &TaskService{store: store, clock: clock, notifier: notifier, bus: b},
-		store: store,
-		bus:   b,
+		Tasks:     &TaskService{store: store, clock: clock, notifier: notifier, bus: b},
+		Reminders: &ReminderService{store: store, clock: clock, notifier: notifier, bus: b},
+		store:     store,
+		bus:       b,
 	}
 }

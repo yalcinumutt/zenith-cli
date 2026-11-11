@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/yalcinumutt/zenith-cli/internal/models"
 	"github.com/yalcinumutt/zenith-cli/internal/ui"
 )
 
@@ -32,20 +31,16 @@ var timerAddCmd = &cobra.Command{
 			return fmt.Errorf("invalid duration format (e.g. 25m, 10s, 1h): %w", err)
 		}
 
-		triggerTime := time.Now().Add(duration)
-		timer := &models.ScheduledTimer{
-			Title:       message,
-			TriggerTime: triggerTime,
-			Status:      "pending",
-		}
-
+		var taskID *int64
 		if taskIDFlag != 0 {
-			timer.TaskID = &taskIDFlag
+			taskID = &taskIDFlag
 		}
 
-		if err := store.AddScheduledTimer(timer); err != nil {
+		timer, err := app.Reminders.Add(message, duration, taskID)
+		if err != nil {
 			return err
 		}
+		triggerTime := timer.TriggerTime
 
 		fmt.Printf("Timer scheduled! ID: %d. Will trigger in %s (at %s).\n", 
 			timer.ID, duration, triggerTime.Format("15:04:05"))
@@ -57,7 +52,7 @@ var timerListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all pending scheduled timers",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		timers, err := store.GetPendingScheduledTimers()
+		timers, err := app.Reminders.Pending()
 		if err != nil {
 			return err
 		}
@@ -94,33 +89,17 @@ var timerDaemonCmd = &cobra.Command{
 		fmt.Println("Checking for expired timers... Press Ctrl+C to stop.")
 
 		for {
-			timers, err := store.GetPendingScheduledTimers()
-			if err == nil {
-				now := time.Now()
-				for _, t := range timers {
-					if t.TriggerTime.Before(now) {
-						// Trigger notification
-						triggerDesktopNotification(t.Title)
-
-						// Mark as triggered
-						_ = store.MarkScheduledTimerTriggered(t.ID)
-
-						// Log to stdout
-						fmt.Printf("[%s] 🔔 TIMER TRIGGERED: %s\n", 
-							now.Format("15:04:05"), ui.TitleStyle.Render(t.Title))
-					}
-				}
+			now := time.Now()
+			fired, err := app.Tick(now)
+			reportNotifyError(err)
+			for _, r := range fired {
+				fmt.Print("\a") // Terminal bell/alert sound
+				fmt.Printf("[%s] 🔔 TIMER TRIGGERED: %s\n",
+					now.Format("15:04:05"), ui.TitleStyle.Render(r.Title))
 			}
 			time.Sleep(1 * time.Second)
 		}
 	},
-}
-
-func triggerDesktopNotification(message string) {
-	sendDesktopNotification(message)
-
-	// Terminal bell/alert sound
-	fmt.Print("\a")
 }
 
 func init() {
