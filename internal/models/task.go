@@ -11,14 +11,23 @@ const (
 	PriorityCritical
 )
 
+// Task and Project statuses (glossary: Status). "In progress" is deliberately
+// absent: it is derived from a running Timer, see Task.InProgress.
+const (
+	StatusOpen      = "open"
+	StatusCompleted = "completed"
+	StatusCancelled = "cancelled"
+)
+
 type Task struct {
 	ID          int64      `json:"id"`
 	UUID        string     `json:"uuid"` // sync identity (ADR 0003); ID stays the local handle
 	Title       string     `json:"title"`
 	Description string     `json:"description"`
-	Status      string     `json:"status"` // Todo, InProgress, Done
+	Status      string     `json:"status"` // open, completed, cancelled
 	Priority    Priority   `json:"priority"`
 	ProjectID   *int64     `json:"project_id"`
+	ParentID    *int64     `json:"parent_id"` // container Task when this is a Subtask (ADR 0005)
 	DueDate     *time.Time `json:"due_date"`
 	PlannedDate *time.Time `json:"planned_date"`
 	Tags        []Tag      `json:"tags"`
@@ -28,3 +37,6 @@ type Task struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
+
+// InProgress is derived, never stored: an open task with a running Timer.
+func (t Task) InProgress() bool { return t.Status == StatusOpen && t.IsRunning }

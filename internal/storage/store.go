@@ -21,6 +21,7 @@ type Store interface {
 	AddTask(task *models.Task) error
 	GetTasks() ([]models.Task, error)
 	GetTask(id int64) (*models.Task, error) // ErrNotFound when absent
+	GetSubtasks(parentID int64) ([]models.Task, error)
 	UpdateTask(task *models.Task) error
 	DeleteTask(id int64) error
 	OpenTimeLog(taskID int64, start time.Time) error

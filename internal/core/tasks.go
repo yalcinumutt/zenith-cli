@@ -9,12 +9,6 @@ import (
 	"github.com/yalcinumutt/zenith-cli/internal/storage"
 )
 
-// Task statuses.
-const (
-	StatusTodo = "todo"
-	StatusDone = "done"
-)
-
 // TaskService owns the task rules: status transitions, history entries, timer
 // handling and not-found errors.
 type TaskService struct {
@@ -28,30 +22,73 @@ type TaskService struct {
 type AddTaskInput struct {
 	Title     string
 	ProjectID *int64
+	ParentID  *int64 // makes the new task a Subtask of this task
 	DueDate   *time.Time
 	Priority  models.Priority
 	Recurring string
 }
 
+// changes collects what a mutation touched so events publish only after the
+// transaction commits.
+type changes struct {
+	items []TaskChanged
+}
+
+func (c *changes) add(id int64, kind ChangeKind) { c.items = append(c.items, TaskChanged{id, kind}) }
+
+// run executes fn in one transaction and announces its changes after commit.
+func (s *TaskService) run(fn func(tx storage.Store, ch *changes) error) error {
+	ch := &changes{}
+	if err := s.store.WithTx(func(tx storage.Store) error { return fn(tx, ch) }); err != nil {
+		return err
+	}
+	for _, c := range ch.items {
+		s.bus.publish(c)
+	}
+	if len(ch.items) > 0 {
+		s.bus.publish(ListsInvalidated{Keys: []string{ListTasks}})
+	}
+	return nil
+}
+
 func (s *TaskService) Add(in AddTaskInput) (*models.Task, error) {
 	task := &models.Task{
 		Title:     in.Title,
-		Status:    StatusTodo,
+		Status:    models.StatusOpen,
 		Priority:  in.Priority,
 		ProjectID: in.ProjectID,
+		ParentID:  in.ParentID,
 		DueDate:   in.DueDate,
 		Recurring: in.Recurring,
 	}
-	err := s.store.WithTx(func(tx storage.Store) error {
+	err := s.run(func(tx storage.Store, ch *changes) error {
+		if in.ParentID != nil {
+			parent, err := s.get(tx, *in.ParentID)
+			if err != nil {
+				return err
+			}
+			if parent.Status == models.StatusCancelled {
+				return invalidError(fmt.Sprintf("task %d is cancelled; reopen it before adding subtasks", parent.ID))
+			}
+			if task.ProjectID == nil {
+				task.ProjectID = parent.ProjectID // a Subtask files with its parent unless told otherwise
+			}
+			// A new open Subtask makes a completed parent open work again.
+			if parent.Status == models.StatusCompleted {
+				if err := s.reopen(tx, ch, parent.ID); err != nil {
+					return err
+				}
+			}
+		}
 		if err := tx.AddTask(task); err != nil {
 			return err
 		}
+		ch.add(task.ID, ChangeCreated)
 		return s.record(tx, task.ID, "created", fmt.Sprintf("Task created: '%s'", task.Title))
 	})
 	if err != nil {
 		return nil, err
 	}
-	s.changed(task.ID, ChangeCreated)
 	return task, nil
 }
 
@@ -64,14 +101,85 @@ func (s *TaskService) Get(id int64) (*models.Task, error) {
 	return s.get(s.store, id)
 }
 
-// Complete marks the task done, stopping its running timer first.
-func (s *TaskService) Complete(id int64) error {
-	return s.setStatus(id, StatusDone)
+// Subtasks returns the direct Subtasks of a task, oldest first.
+func (s *TaskService) Subtasks(id int64) ([]models.Task, error) {
+	if _, err := s.get(s.store, id); err != nil {
+		return nil, err
+	}
+	return s.store.GetSubtasks(id)
 }
 
-// Reopen puts a finished task back to todo.
+// Complete marks the task completed and stops its running timer. It is refused
+// while the task has open Subtasks. Completing the last open Subtask of a task
+// completes that task too, through this same path (ADR 0005).
+func (s *TaskService) Complete(id int64) error {
+	return s.run(func(tx storage.Store, ch *changes) error { return s.complete(tx, ch, id) })
+}
+
+// Reopen makes a completed or cancelled task open again. A completed parent of
+// a reopened Subtask is reopened too.
 func (s *TaskService) Reopen(id int64) error {
-	return s.setStatus(id, StatusTodo)
+	return s.run(func(tx storage.Store, ch *changes) error { return s.reopen(tx, ch, id) })
+}
+
+// Cancel marks the task and its open Subtasks cancelled, stopping their timers.
+func (s *TaskService) Cancel(id int64) error {
+	return s.run(func(tx storage.Store, ch *changes) error {
+		t, err := s.get(tx, id)
+		if err != nil {
+			return err
+		}
+		if t.Status == models.StatusCancelled {
+			return nil
+		}
+		if err := s.cancelTree(tx, ch, t); err != nil {
+			return err
+		}
+		if t.ParentID != nil {
+			return s.completeParentIfDone(tx, ch, *t.ParentID)
+		}
+		return nil
+	})
+}
+
+// SetParent nests the task under parentID, or makes it top-level when nil. A
+// nesting that would make a task its own ancestor is rejected with ErrCycle.
+func (s *TaskService) SetParent(id int64, parentID *int64) error {
+	return s.run(func(tx storage.Store, ch *changes) error {
+		t, err := s.get(tx, id)
+		if err != nil {
+			return err
+		}
+		if sameID(t.ParentID, parentID) {
+			return nil
+		}
+		oldParent := t.ParentID
+		if parentID != nil {
+			if err := s.checkAcyclic(tx, id, *parentID); err != nil {
+				return err
+			}
+			parent, err := s.get(tx, *parentID)
+			if err != nil {
+				return err
+			}
+			if parent.Status == models.StatusCancelled {
+				return invalidError(fmt.Sprintf("task %d is cancelled; reopen it before adding subtasks", parent.ID))
+			}
+			if parent.Status == models.StatusCompleted && t.Status == models.StatusOpen {
+				if err := s.reopen(tx, ch, parent.ID); err != nil {
+					return err
+				}
+			}
+		}
+		if err := s.save(tx, t, func(t *models.Task) { t.ParentID = parentID }); err != nil {
+			return err
+		}
+		ch.add(id, ChangeUpdated)
+		if oldParent != nil {
+			return s.completeParentIfDone(tx, ch, *oldParent)
+		}
+		return nil
+	})
 }
 
 // MoveToProject assigns the task to a project.
@@ -84,22 +192,26 @@ func (s *TaskService) Plan(id int64, day time.Time) error {
 	return s.edit(id, func(t *models.Task) { t.PlannedDate = &day })
 }
 
+// Delete removes the task together with its Subtasks.
 func (s *TaskService) Delete(id int64) error {
-	err := s.store.WithTx(func(tx storage.Store) error {
-		if _, err := s.get(tx, id); err != nil {
+	return s.run(func(tx storage.Store, ch *changes) error {
+		t, err := s.get(tx, id)
+		if err != nil {
 			return err
 		}
-		return tx.DeleteTask(id)
+		if err := s.deleteTree(tx, ch, id); err != nil {
+			return err
+		}
+		if t.ParentID != nil {
+			return s.completeParentIfDone(tx, ch, *t.ParentID)
+		}
+		return nil
 	})
-	if err == nil {
-		s.changed(id, ChangeDeleted)
-	}
-	return err
 }
 
 // Tag attaches a tag, creating it by name when needed.
 func (s *TaskService) Tag(id int64, name, color string) error {
-	err := s.store.WithTx(func(tx storage.Store) error {
+	return s.run(func(tx storage.Store, ch *changes) error {
 		if _, err := s.get(tx, id); err != nil {
 			return err
 		}
@@ -110,18 +222,15 @@ func (s *TaskService) Tag(id int64, name, color string) error {
 		if err := tx.AttachTagToTask(id, tag.ID); err != nil {
 			return fmt.Errorf("could not attach tag: %w", err)
 		}
+		ch.add(id, ChangeTagged)
 		return nil
 	})
-	if err == nil {
-		s.changed(id, ChangeTagged)
-	}
-	return err
 }
 
 // StartTimer begins tracking time on the task. A timer already running on the
 // same task is stopped first, so a task never has two open logs.
 func (s *TaskService) StartTimer(id int64) error {
-	err := s.store.WithTx(func(tx storage.Store) error {
+	return s.run(func(tx storage.Store, ch *changes) error {
 		if _, err := s.get(tx, id); err != nil {
 			return err
 		}
@@ -131,26 +240,23 @@ func (s *TaskService) StartTimer(id int64) error {
 		if err := tx.OpenTimeLog(id, s.clock.Now()); err != nil {
 			return err
 		}
+		ch.add(id, ChangeTimer)
 		return s.record(tx, id, "started_timer", "Started tracking time")
 	})
-	if err == nil {
-		s.changed(id, ChangeTimer)
-	}
-	return err
 }
 
 // StopTimer ends the task's running timer; it is a no-op when none runs.
 func (s *TaskService) StopTimer(id int64) error {
-	err := s.store.WithTx(func(tx storage.Store) error {
+	return s.run(func(tx storage.Store, ch *changes) error {
 		if _, err := s.get(tx, id); err != nil {
 			return err
 		}
-		return s.stopTimer(tx, id)
+		if err := s.stopTimer(tx, id); err != nil {
+			return err
+		}
+		ch.add(id, ChangeTimer)
+		return nil
 	})
-	if err == nil {
-		s.changed(id, ChangeTimer)
-	}
-	return err
 }
 
 // History returns the task's events, newest first.
@@ -184,37 +290,166 @@ func (s *TaskService) stopTimer(tx storage.Store, id int64) error {
 		fmt.Sprintf("Stopped tracking time. Duration: %dh %dm %ds", secs/3600, (secs%3600)/60, secs%60))
 }
 
-func (s *TaskService) setStatus(id int64, status string) error {
-	err := s.store.WithTx(func(tx storage.Store) error {
-		t, err := s.get(tx, id)
+// complete is the single completion path: a manual completion and the
+// automatic completion of a parent both run through it.
+func (s *TaskService) complete(tx storage.Store, ch *changes, id int64) error {
+	t, err := s.get(tx, id)
+	if err != nil {
+		return err
+	}
+	if t.Status == models.StatusCompleted {
+		return nil
+	}
+	kids, err := tx.GetSubtasks(id)
+	if err != nil {
+		return err
+	}
+	if open := countOpen(kids); open > 0 {
+		return &OpenSubtasksError{TaskID: id, Count: open}
+	}
+	if t.IsRunning {
+		if err := s.stopTimer(tx, id); err != nil {
+			return err
+		}
+	}
+	if err := s.save(tx, t, func(t *models.Task) { t.Status = models.StatusCompleted }); err != nil {
+		return err
+	}
+	ch.add(id, ChangeStatus)
+	if t.ParentID != nil {
+		return s.completeParentIfDone(tx, ch, *t.ParentID)
+	}
+	return nil
+}
+
+// completeParentIfDone completes an open parent whose Subtasks are all closed
+// and at least one of them completed.
+func (s *TaskService) completeParentIfDone(tx storage.Store, ch *changes, parentID int64) error {
+	parent, err := s.get(tx, parentID)
+	if err != nil {
+		return err
+	}
+	if parent.Status != models.StatusOpen {
+		return nil
+	}
+	kids, err := tx.GetSubtasks(parentID)
+	if err != nil {
+		return err
+	}
+	completed := 0
+	for _, k := range kids {
+		switch k.Status {
+		case models.StatusOpen:
+			return nil
+		case models.StatusCompleted:
+			completed++
+		}
+	}
+	if completed == 0 {
+		return nil
+	}
+	return s.complete(tx, ch, parentID)
+}
+
+func (s *TaskService) reopen(tx storage.Store, ch *changes, id int64) error {
+	t, err := s.get(tx, id)
+	if err != nil {
+		return err
+	}
+	if t.Status == models.StatusOpen {
+		return nil
+	}
+	if err := s.save(tx, t, func(t *models.Task) { t.Status = models.StatusOpen }); err != nil {
+		return err
+	}
+	ch.add(id, ChangeStatus)
+	if t.ParentID != nil {
+		parent, err := s.get(tx, *t.ParentID)
 		if err != nil {
 			return err
 		}
-		if status == StatusDone && t.IsRunning {
-			if err := s.stopTimer(tx, id); err != nil {
+		if parent.Status == models.StatusCompleted {
+			return s.reopen(tx, ch, parent.ID)
+		}
+	}
+	return nil
+}
+
+// cancelTree cancels t and every open descendant without touching ancestors.
+func (s *TaskService) cancelTree(tx storage.Store, ch *changes, t *models.Task) error {
+	kids, err := tx.GetSubtasks(t.ID)
+	if err != nil {
+		return err
+	}
+	for i := range kids {
+		if kids[i].Status == models.StatusOpen {
+			if err := s.cancelTree(tx, ch, &kids[i]); err != nil {
 				return err
 			}
 		}
-		return s.save(tx, t, func(t *models.Task) { t.Status = status })
-	})
-	if err == nil {
-		s.changed(id, ChangeStatus)
 	}
-	return err
+	if t.IsRunning {
+		if err := s.stopTimer(tx, t.ID); err != nil {
+			return err
+		}
+	}
+	if err := s.save(tx, t, func(t *models.Task) { t.Status = models.StatusCancelled }); err != nil {
+		return err
+	}
+	ch.add(t.ID, ChangeStatus)
+	return nil
+}
+
+func (s *TaskService) deleteTree(tx storage.Store, ch *changes, id int64) error {
+	kids, err := tx.GetSubtasks(id)
+	if err != nil {
+		return err
+	}
+	for _, k := range kids {
+		if err := s.deleteTree(tx, ch, k.ID); err != nil {
+			return err
+		}
+	}
+	if err := tx.DeleteTask(id); err != nil {
+		return err
+	}
+	ch.add(id, ChangeDeleted)
+	return nil
+}
+
+// checkAcyclic rejects nesting id under parentID when parentID is id or one of
+// its descendants, by walking up from the new parent.
+func (s *TaskService) checkAcyclic(tx storage.Store, id, parentID int64) error {
+	seen := map[int64]bool{}
+	for cur := &parentID; cur != nil; {
+		if *cur == id {
+			return &CycleError{TaskID: id, ParentID: parentID}
+		}
+		if seen[*cur] {
+			return nil // pre-existing loop elsewhere; not caused by this change
+		}
+		seen[*cur] = true
+		t, err := s.get(tx, *cur)
+		if err != nil {
+			return err
+		}
+		cur = t.ParentID
+	}
+	return nil
 }
 
 func (s *TaskService) edit(id int64, mutate func(*models.Task)) error {
-	err := s.store.WithTx(func(tx storage.Store) error {
+	return s.run(func(tx storage.Store, ch *changes) error {
 		t, err := s.get(tx, id)
 		if err != nil {
 			return err
 		}
-		return s.save(tx, t, mutate)
+		if err := s.save(tx, t, mutate); err != nil {
+			return err
+		}
+		ch.add(id, ChangeUpdated)
+		return nil
 	})
-	if err == nil {
-		s.changed(id, ChangeUpdated)
-	}
-	return err
 }
 
 // save applies mutate, persists, and records a status_changed or edited entry.
@@ -232,7 +467,19 @@ func (s *TaskService) save(tx storage.Store, t *models.Task, mutate func(*models
 	return s.record(tx, t.ID, "edited", fmt.Sprintf("Task edited: '%s'", t.Title))
 }
 
-// changed announces a committed task mutation.
-func (s *TaskService) changed(id int64, kind ChangeKind) {
-	s.bus.publish(TaskChanged{TaskID: id, Kind: kind}, ListsInvalidated{Keys: []string{ListTasks}})
+func countOpen(tasks []models.Task) int {
+	n := 0
+	for _, t := range tasks {
+		if t.Status == models.StatusOpen {
+			n++
+		}
+	}
+	return n
+}
+
+func sameID(a, b *int64) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }

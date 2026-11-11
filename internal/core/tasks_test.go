@@ -64,7 +64,7 @@ func TestAddRecordsCreatedHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if task.Status != core.StatusTodo || task.ID == 0 {
+	if task.Status != models.StatusOpen || task.ID == 0 {
 		t.Fatalf("unexpected task %+v", task)
 	}
 	if got := actions(t, c, task.ID); !eq(got, []string{"created"}) {
@@ -161,7 +161,7 @@ func TestCompleteStopsRunningTimerAndRecordsStatusChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := c.Tasks.Get(task.ID)
-	if got.Status != core.StatusDone || got.IsRunning || got.TotalTime != 10 {
+	if got.Status != models.StatusCompleted || got.IsRunning || got.TotalTime != 10 {
 		t.Errorf("got %+v", got)
 	}
 	if !got.UpdatedAt.Equal(clock.now) {
@@ -176,7 +176,7 @@ func TestCompleteStopsRunningTimerAndRecordsStatusChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ = c.Tasks.Get(task.ID)
-	if got.Status != core.StatusTodo {
+	if got.Status != models.StatusOpen {
 		t.Errorf("status after reopen = %q", got.Status)
 	}
 }

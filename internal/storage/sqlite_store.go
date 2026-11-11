@@ -147,8 +147,8 @@ func ensureDefaultProject(db *sql.DB) error {
 
 func (s *SQLiteStore) AddTask(task *models.Task) error {
 	task.UUID = newUUID()
-	query := `INSERT INTO tasks (uuid, project_id, title, description, status, priority, due_date, planned_date, recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	res, err := s.q.Exec(query, task.UUID, task.ProjectID, task.Title, task.Description, task.Status, task.Priority, task.DueDate, task.PlannedDate, task.Recurring)
+	query := `INSERT INTO tasks (uuid, project_id, parent_task_id, title, description, status, priority, due_date, planned_date, recurring) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	res, err := s.q.Exec(query, task.UUID, task.ProjectID, task.ParentID, task.Title, task.Description, task.Status, task.Priority, task.DueDate, task.PlannedDate, task.Recurring)
 	if err != nil {
 		return fmt.Errorf("could not insert task: %w", err)
 	}
@@ -164,7 +164,7 @@ func (s *SQLiteStore) AddTask(task *models.Task) error {
 
 const taskSelect = `
 		SELECT 
-			t.id, t.uuid, t.project_id, t.title, t.description, t.status, t.priority, t.due_date, t.planned_date, t.recurring, t.created_at, t.updated_at,
+			t.id, t.uuid, t.project_id, t.parent_task_id, t.title, t.description, t.status, t.priority, t.due_date, t.planned_date, t.recurring, t.created_at, t.updated_at,
 			EXISTS(SELECT 1 FROM task_time_logs WHERE task_id = t.id AND end_time IS NULL) as is_running,
 			COALESCE((SELECT SUM(strftime('%s', COALESCE(end_time, CURRENT_TIMESTAMP)) - strftime('%s', start_time)) FROM task_time_logs WHERE task_id = t.id), 0) as total_time
 		FROM tasks t`
@@ -178,7 +178,7 @@ func (s *SQLiteStore) queryTasks(where string, args ...any) ([]models.Task, erro
 	var tasks []models.Task
 	for rows.Next() {
 		var t models.Task
-		err := rows.Scan(&t.ID, &t.UUID, &t.ProjectID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.DueDate, &t.PlannedDate, &t.Recurring, &t.CreatedAt, &t.UpdatedAt, &t.IsRunning, &t.TotalTime)
+		err := rows.Scan(&t.ID, &t.UUID, &t.ProjectID, &t.ParentID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.DueDate, &t.PlannedDate, &t.Recurring, &t.CreatedAt, &t.UpdatedAt, &t.IsRunning, &t.TotalTime)
 		if err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("could not scan task: %w", err)
@@ -203,7 +203,12 @@ func (s *SQLiteStore) queryTasks(where string, args ...any) ([]models.Task, erro
 }
 
 func (s *SQLiteStore) GetTasks() ([]models.Task, error) {
-	return s.queryTasks("")
+	return s.queryTasks(" ORDER BY t.id")
+}
+
+// GetSubtasks returns the direct children of a task, oldest first.
+func (s *SQLiteStore) GetSubtasks(parentID int64) ([]models.Task, error) {
+	return s.queryTasks(" WHERE t.parent_task_id = ? ORDER BY t.id", parentID)
 }
 
 // GetTask returns ErrNotFound when no task has the given id.
@@ -225,8 +230,8 @@ func (s *SQLiteStore) UpdateTask(task *models.Task) error {
 	if !task.UpdatedAt.IsZero() {
 		updated = formatTime(task.UpdatedAt)
 	}
-	query := `UPDATE tasks SET project_id = ?, title = ?, description = ?, status = ?, priority = ?, due_date = ?, planned_date = ?, recurring = ?, updated_at = COALESCE(?, CURRENT_TIMESTAMP) WHERE id = ?`
-	_, err := s.q.Exec(query, task.ProjectID, task.Title, task.Description, task.Status, task.Priority, task.DueDate, task.PlannedDate, task.Recurring, updated, task.ID)
+	query := `UPDATE tasks SET project_id = ?, parent_task_id = ?, title = ?, description = ?, status = ?, priority = ?, due_date = ?, planned_date = ?, recurring = ?, updated_at = COALESCE(?, CURRENT_TIMESTAMP) WHERE id = ?`
+	_, err := s.q.Exec(query, task.ProjectID, task.ParentID, task.Title, task.Description, task.Status, task.Priority, task.DueDate, task.PlannedDate, task.Recurring, updated, task.ID)
 	if err != nil {
 		return fmt.Errorf("could not update task: %w", err)
 	}

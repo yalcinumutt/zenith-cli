@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/yalcinumutt/zenith-cli/internal/models"
 	"github.com/yalcinumutt/zenith-cli/internal/ui"
 )
 
@@ -24,7 +25,7 @@ var planCmd = &cobra.Command{
 		fmt.Println("Select tasks by ID to add to today's plan (enter 'done' when finished):")
 
 		for _, t := range tasks {
-			if t.Status != "done" && t.PlannedDate == nil {
+			if t.Status == models.StatusOpen && t.PlannedDate == nil {
 				fmt.Printf("[%d] %s\n", t.ID, t.Title)
 			}
 		}

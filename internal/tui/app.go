@@ -102,7 +102,7 @@ func (m model) toggleTaskStatus() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	task := m.tasks[m.cursor]
-	if task.Status == core.StatusDone {
+	if task.Status == models.StatusCompleted {
 		_ = m.app.Tasks.Reopen(task.ID)
 	} else {
 		_ = m.app.Tasks.Complete(task.ID)
@@ -135,7 +135,7 @@ func (m model) View() string {
 	// Progress bar calculation
 	var completed int
 	for _, t := range m.tasks {
-		if t.Status == "done" {
+		if t.Status == models.StatusCompleted {
 			completed++
 		}
 	}
@@ -166,7 +166,7 @@ func (m model) View() string {
 		}
 
 		status := ui.StatusTodoStyle.Render("[ ]")
-		if task.Status == "done" {
+		if task.Status == models.StatusCompleted {
 			status = ui.StatusDoneStyle.Render("[x]")
 		}
 

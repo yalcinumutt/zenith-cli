@@ -68,7 +68,7 @@ var summaryCmd = &cobra.Command{
 func renderTaskList(tasks []models.Task) {
 	for _, t := range tasks {
 		status := "[ ]"
-		if t.Status == "done" {
+		if t.Status == models.StatusCompleted {
 			status = "[x]"
 		}
 		

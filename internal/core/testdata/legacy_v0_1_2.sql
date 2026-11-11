@@ -83,6 +83,7 @@ INSERT INTO tasks (id, project_id, title, description, status, priority, recurri
   (1, 1, 'Write report', 'quarterly', 'todo', 1, 'none'),
   (2, 3, 'Fix header', '', 'done', 2, 'none'),
   (5, 3, 'Ship landing page', 'launch', 'todo', 3, 'weekly'),
+  (6, 1, 'Review PR', '', 'InProgress', 1, 'none'),
   (7, NULL, 'Call the bank', '', 'todo', 0, 'none');
 
 INSERT INTO tags (id, name, color) VALUES (1, 'work', '#0000ff'), (4, 'urgent', '#ff0000');
@@ -90,7 +91,8 @@ INSERT INTO task_tags (task_id, tag_id) VALUES (1, 1), (5, 1), (5, 4);
 
 INSERT INTO task_time_logs (id, task_id, start_time, end_time) VALUES
   (1, 2, '2026-01-02 09:00:00', '2026-01-02 09:30:00'),
-  (2, 5, '2026-01-03 10:00:00', '2026-01-03 10:01:30');
+  (2, 5, '2026-01-03 10:00:00', '2026-01-03 10:01:30'),
+  (3, 6, '2026-01-04 11:00:00', NULL);
 
 INSERT INTO habits (id, name, description, frequency) VALUES (1, 'Read', '', 'daily'), (3, 'Stretch', 'morning', 'daily');
 INSERT INTO habit_logs (id, habit_id, completed_at) VALUES (1, 1, '2026-01-02 08:00:00'), (2, 1, '2026-01-03 08:00:00'), (3, 3, '2026-01-03 08:05:00');

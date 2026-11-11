@@ -76,7 +76,12 @@ func migrate(db *sql.DB) error {
 	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_task_history_task ON task_history(task_id)")
 
 	// 8. Sync identity: a uuid on every entity table (ADR 0003).
-	return migrateUUIDs(db)
+	if err := migrateUUIDs(db); err != nil {
+		return err
+	}
+
+	// 9. Status model and Subtasks (ADR 0005).
+	return migrateStatusAndSubtasks(db)
 }
 
 // uuidTables are the tables with an integer `id` handle. The task_tags join
@@ -138,4 +143,37 @@ func columnExists(db *sql.DB, tableName, columnName string) bool {
 		}
 	}
 	return false
+}
+
+// migrateStatusAndSubtasks moves tasks to Status = open | completed | cancelled
+// and adds the parent container column. Both steps are idempotent.
+//
+// Legacy 'done' becomes completed; everything else that is not already a new
+// value (todo, in_progress, ...) becomes open. A task that was in progress keeps
+// its running time log, which is what now makes it "in progress".
+func migrateStatusAndSubtasks(db *sql.DB) error {
+	if !columnExists(db, "tasks", "id") {
+		return nil
+	}
+	if !columnExists(db, "tasks", "parent_task_id") {
+		_, err := db.Exec("ALTER TABLE tasks ADD COLUMN parent_task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE")
+		if err != nil && !columnExists(db, "tasks", "parent_task_id") {
+			return fmt.Errorf("failed to add parent_task_id column: %w", err)
+		}
+	}
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)"); err != nil {
+		return fmt.Errorf("failed to index parent_task_id: %w", err)
+	}
+	if !columnExists(db, "tasks", "status") {
+		return nil // partial legacy table; the schema step adds it with the default
+	}
+	_, err := db.Exec(`UPDATE tasks SET status = CASE
+			WHEN lower(status) IN ('done', 'completed') THEN 'completed'
+			WHEN lower(status) IN ('cancelled', 'canceled') THEN 'cancelled'
+			ELSE 'open' END
+		WHERE status IS NULL OR status NOT IN ('open', 'completed', 'cancelled')`)
+	if err != nil {
+		return fmt.Errorf("failed to migrate task statuses: %w", err)
+	}
+	return nil
 }

@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     project_id INTEGER,
     title TEXT NOT NULL,
     description TEXT,
-    status TEXT DEFAULT 'todo',
+    status TEXT DEFAULT 'open',
     priority INTEGER DEFAULT 0,
     due_date DATETIME,
     planned_date DATE,

@@ -2,12 +2,14 @@ package core_test
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
 	"testing"
 
 	"github.com/yalcinumutt/zenith-cli/internal/core"
+	"github.com/yalcinumutt/zenith-cli/internal/models"
 	"github.com/yalcinumutt/zenith-cli/internal/storage"
 	_ "modernc.org/sqlite"
 )
@@ -133,7 +135,7 @@ func TestLegacyRowsAndIntegerHandlesSurvive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[int64]string{1: "Write report", 2: "Fix header", 5: "Ship landing page", 7: "Call the bank"}
+	want := map[int64]string{1: "Write report", 2: "Fix header", 5: "Ship landing page", 6: "Review PR", 7: "Call the bank"}
 	if len(tasks) != len(want) {
 		t.Fatalf("got %d tasks, want %d", len(tasks), len(want))
 	}
@@ -223,5 +225,60 @@ func TestNewRowsGetUUIDsThroughTheCore(t *testing.T) {
 	after, _ := c.Tasks.Get(task.ID)
 	if before.Tags[0].UUID != after.Tags[0].UUID {
 		t.Errorf("tag uuid changed on re-tag: %s -> %s", before.Tags[0].UUID, after.Tags[0].UUID)
+	}
+}
+
+func TestLegacyStatusesMigrateToTheNewModel(t *testing.T) {
+	c := openAt(t, legacyDB(t, legacyV012))
+
+	want := map[int64]string{
+		1: models.StatusOpen,      // Todo
+		2: models.StatusCompleted, // Done
+		5: models.StatusOpen,
+		6: models.StatusOpen, // InProgress -> open, its running Timer keeps it in progress
+		7: models.StatusOpen,
+	}
+	for id, status := range want {
+		task, err := c.Tasks.Get(id)
+		if err != nil || task.Status != status {
+			t.Errorf("task %d status = %q (err %v), want %q", id, task.Status, err, status)
+		}
+		if task.ParentID != nil {
+			t.Errorf("task %d unexpectedly has a parent", id)
+		}
+	}
+
+	running, _ := c.Tasks.Get(6)
+	if !running.IsRunning || !running.InProgress() {
+		t.Errorf("task 6 should still be in progress via its running timer: %+v", running)
+	}
+	if idle, _ := c.Tasks.Get(1); idle.InProgress() {
+		t.Error("task 1 has no timer and must not be in progress")
+	}
+
+	// Completing a migrated in-progress task stops its timer.
+	if err := c.Tasks.Complete(6); err != nil {
+		t.Fatal(err)
+	}
+	done, _ := c.Tasks.Get(6)
+	if done.Status != models.StatusCompleted || done.IsRunning {
+		t.Errorf("task 6 after complete = %+v", done)
+	}
+}
+
+func TestLegacyTasksCanBecomeSubtasks(t *testing.T) {
+	c := openAt(t, legacyDB(t, legacyV012))
+	parent := int64(1)
+	if err := c.Tasks.SetParent(5, &parent); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Tasks.Complete(1); !errors.Is(err, core.ErrOpenSubtasks) {
+		t.Errorf("completing a parent with an open subtask: %v", err)
+	}
+	if err := c.Tasks.Complete(5); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := c.Tasks.Get(1); p.Status != models.StatusCompleted {
+		t.Errorf("parent status = %q, want completed", p.Status)
 	}
 }

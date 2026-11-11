@@ -124,8 +124,8 @@ func SuggestTasks(tasks []models.Task, habits []models.Habit) (string, error) {
 		taskListStr = "- No current tasks.\n"
 	} else {
 		for _, t := range tasks {
-			status := "Todo"
-			if t.Status == "done" {
+			status := "Open"
+			if t.Status == models.StatusCompleted {
 				status = "Completed"
 			}
 			taskListStr += fmt.Sprintf("- ID: %d, Title: %s, Status: %s, Priority: %d, Tracked Time: %ds\n", t.ID, t.Title, status, t.Priority, t.TotalTime)
@@ -163,8 +163,8 @@ func GenerateSummary(tasks []models.Task, habits []models.Habit) (string, error)
 		taskListStr = "- No tasks logged.\n"
 	} else {
 		for _, t := range tasks {
-			status := "Todo"
-			if t.Status == "done" {
+			status := "Open"
+			if t.Status == models.StatusCompleted {
 				status = "Completed"
 			}
 			taskListStr += fmt.Sprintf("- ID: %d, Title: %s, Status: %s, Time Spent: %dh %dm %ds\n", t.ID, t.Title, status, t.TotalTime/3600, (t.TotalTime%3600)/60, t.TotalTime%60)

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/yalcinumutt/zenith-cli/internal/models"
 	"github.com/yalcinumutt/zenith-cli/internal/ui"
 )
 
@@ -21,7 +22,7 @@ var logCmd = &cobra.Command{
 
 		doneTasks := []string{}
 		for _, t := range tasks {
-			if t.Status == "done" {
+			if t.Status == models.StatusCompleted {
 				duration := fmt.Sprintf("%dh %dm %ds", t.TotalTime/3600, (t.TotalTime%3600)/60, t.TotalTime%60)
 				doneTasks = append(doneTasks, fmt.Sprintf(" • %s (Time: %s)", t.Title, duration))
 			}
