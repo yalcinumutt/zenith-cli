@@ -29,7 +29,7 @@ type Task struct {
 	ProjectID   *int64     `json:"project_id"`
 	AreaID      *int64     `json:"area_id"`    // set only for tasks filed directly in an Area
 	HeadingID   *int64     `json:"heading_id"` // set only inside a Project
-	ParentID    *int64     `json:"parent_id"` // container Task when this is a Subtask (ADR 0005)
+	ParentID    *int64     `json:"parent_id"`  // container Task when this is a Subtask (ADR 0005)
 	DueDate     *time.Time `json:"due_date"`
 	PlannedDate *time.Time `json:"planned_date"`
 	Tags        []Tag      `json:"tags"`

@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/yalcinumutt/zenith-cli/internal/models"
@@ -258,14 +259,15 @@ func (s *TaskService) Delete(id int64) error {
 	})
 }
 
-// Tag attaches a tag, creating it by name when needed.
+// Tag attaches a tag to the task, finding it by case-insensitive name or
+// creating it. Attaching a tag the task already has changes nothing.
 func (s *TaskService) Tag(id int64, name, color string) error {
 	return s.run(func(tx storage.Store, ch *changes) error {
 		if _, err := s.get(tx, id); err != nil {
 			return err
 		}
-		tag := &models.Tag{Name: name, Color: color}
-		if err := tx.AddTag(tag); err != nil {
+		tag, err := findOrCreateTag(tx, name, color)
+		if err != nil {
 			return fmt.Errorf("could not create tag: %w", err)
 		}
 		if err := tx.AttachTagToTask(id, tag.ID); err != nil {
@@ -273,6 +275,28 @@ func (s *TaskService) Tag(id int64, name, color string) error {
 		}
 		ch.add(id, ChangeTagged)
 		return nil
+	})
+}
+
+// Untag detaches the tag with the given (case-insensitive) name. The tag
+// itself remains available for other tasks.
+func (s *TaskService) Untag(id int64, name string) error {
+	return s.run(func(tx storage.Store, ch *changes) error {
+		t, err := s.get(tx, id)
+		if err != nil {
+			return err
+		}
+		key := NormalizeTagName(name)
+		for _, tag := range t.Tags {
+			if NormalizeTagName(tag.Name) == key {
+				if err := tx.DetachTagFromTask(id, tag.ID); err != nil {
+					return err
+				}
+				ch.add(id, ChangeTagged)
+				return nil
+			}
+		}
+		return invalidError(fmt.Sprintf("task %d has no tag %q", id, strings.TrimSpace(name)))
 	})
 }
 

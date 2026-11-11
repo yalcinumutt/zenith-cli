@@ -345,6 +345,23 @@ var taskTagCmd = &cobra.Command{
 	},
 }
 
+var taskUntagCmd = &cobra.Command{
+	Use:   "untag [id] [tag_name]",
+	Short: "Remove a tag from a task",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := strconv.ParseInt(args[0], 10, 64)
+		if err != nil {
+			return fmt.Errorf(errMsgInvalidID, err)
+		}
+		if err := app.Tasks.Untag(id, args[1]); err != nil {
+			return err
+		}
+		fmt.Printf("Removed tag '%s' from task %d\n", args[1], id)
+		return nil
+	},
+}
+
 var taskDeleteCmd = &cobra.Command{
 	Use:   "delete [id]",
 	Short: "Delete a task",
@@ -442,6 +459,7 @@ func init() {
 	taskCmd.AddCommand(taskStartCmd)
 	taskCmd.AddCommand(taskStopCmd)
 	taskCmd.AddCommand(taskTagCmd)
+	taskCmd.AddCommand(taskUntagCmd)
 	taskCmd.AddCommand(taskMoveCmd)
 	taskCmd.AddCommand(taskHistoryCmd)
 }

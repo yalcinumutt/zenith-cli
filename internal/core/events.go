@@ -45,6 +45,7 @@ const (
 	ListProjects = "projects"
 	ListHabits   = "habits"
 	ListAreas    = "areas"
+	ListTags     = "tags"
 	ListHeadings = "headings"
 )
 

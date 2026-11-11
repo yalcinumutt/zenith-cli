@@ -86,7 +86,12 @@ func migrate(db *sql.DB) error {
 	}
 
 	// 10. Area > Project > Heading > Task, and the retired Anytime project.
-	return migrateHierarchy(db)
+	if err := migrateHierarchy(db); err != nil {
+		return err
+	}
+
+	// 11. Tags are unique by normalized name in the core, not by constraint.
+	return migrateTagsDropUnique(db)
 }
 
 // uuidTables are the tables with an integer `id` handle. The task_tags join
@@ -228,4 +233,42 @@ func migrateHierarchy(db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+// migrateTagsDropUnique removes the UNIQUE constraint on tags.name (ADR 0010).
+// SQLite cannot drop a constraint in place, so the table is rebuilt with every
+// id, uuid and attachment preserved. It does nothing once the constraint is gone.
+func migrateTagsDropUnique(db *sql.DB) error {
+	if !columnExists(db, "tags", "uuid") {
+		return nil
+	}
+	var n int
+	err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master
+		WHERE type = 'index' AND tbl_name = 'tags' AND name LIKE 'sqlite_autoindex_tags_%'`).Scan(&n)
+	if err != nil || n == 0 {
+		return err
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, stmt := range []string{
+		`CREATE TABLE tags_rebuilt (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			color TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			uuid TEXT
+		)`,
+		"INSERT INTO tags_rebuilt (id, name, color, created_at, uuid) SELECT id, name, color, created_at, uuid FROM tags",
+		"DROP TABLE tags",
+		"ALTER TABLE tags_rebuilt RENAME TO tags",
+		"CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_uuid ON tags(uuid)",
+	} {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("failed to rebuild tags without UNIQUE name: %w", err)
+		}
+	}
+	return tx.Commit()
 }

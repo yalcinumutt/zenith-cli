@@ -32,7 +32,10 @@ type Store interface {
 
 	// Tags
 	AddTag(tag *models.Tag) error
+	GetTags() ([]models.Tag, error)
+	UpdateTag(tag *models.Tag) error
 	AttachTagToTask(taskID, tagID int64) error
+	DetachTagFromTask(taskID, tagID int64) error
 	GetTagsForTask(taskID int64) ([]models.Tag, error)
 
 	// Habits

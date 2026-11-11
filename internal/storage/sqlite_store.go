@@ -360,13 +360,44 @@ func (s *SQLiteStore) CloseOpenTimeLog(taskID int64, end time.Time) (secs int64,
 	return end.Unix() - startUnix, true, nil
 }
 
+// AddTag inserts a tag. Name uniqueness is the core's rule, not the database's.
 func (s *SQLiteStore) AddTag(tag *models.Tag) error {
-	// An existing tag keeps its uuid; only the color is refreshed.
-	_, err := s.q.Exec(`INSERT INTO tags (uuid, name, color) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET color = excluded.color`, newUUID(), tag.Name, tag.Color)
+	tag.UUID = newUUID()
+	res, err := s.q.Exec(`INSERT INTO tags (uuid, name, color) VALUES (?, ?, ?)`, tag.UUID, tag.Name, tag.Color)
 	if err != nil {
 		return err
 	}
-	return s.q.QueryRow(`SELECT id, uuid FROM tags WHERE name = ?`, tag.Name).Scan(&tag.ID, &tag.UUID)
+	tag.ID, err = res.LastInsertId()
+	return err
+}
+
+func (s *SQLiteStore) GetTags() ([]models.Tag, error) {
+	rows, err := s.q.Query(`SELECT id, uuid, name, color, created_at FROM tags ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tags []models.Tag
+	for rows.Next() {
+		var t models.Tag
+		var color sql.NullString
+		if err := rows.Scan(&t.ID, &t.UUID, &t.Name, &color, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		t.Color = color.String
+		tags = append(tags, t)
+	}
+	return tags, rows.Err()
+}
+
+func (s *SQLiteStore) UpdateTag(tag *models.Tag) error {
+	_, err := s.q.Exec(`UPDATE tags SET name = ?, color = ? WHERE id = ?`, tag.Name, tag.Color, tag.ID)
+	return err
+}
+
+func (s *SQLiteStore) DetachTagFromTask(taskID, tagID int64) error {
+	_, err := s.q.Exec(`DELETE FROM task_tags WHERE task_id = ? AND tag_id = ?`, taskID, tagID)
+	return err
 }
 
 func (s *SQLiteStore) AttachTagToTask(taskID, tagID int64) error {
