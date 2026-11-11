@@ -34,6 +34,8 @@ func (NopNotifier) Notify(string, string) error { return nil }
 type Core struct {
 	Tasks     *TaskService
 	Reminders *ReminderService
+	Projects  *ProjectService
+	Habits    *HabitService
 
 	store storage.Store
 	bus   *bus
@@ -52,6 +54,8 @@ func New(store storage.Store, clock Clock, notifier Notifier) *Core {
 	return &Core{
 		Tasks:     &TaskService{store: store, clock: clock, notifier: notifier, bus: b},
 		Reminders: &ReminderService{store: store, clock: clock, notifier: notifier, bus: b},
+		Projects:  &ProjectService{store: store, bus: b},
+		Habits:    &HabitService{store: store, bus: b},
 		store:     store,
 		bus:       b,
 	}

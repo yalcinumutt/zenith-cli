@@ -21,15 +21,11 @@ var aiSuggestCmd = &cobra.Command{
 		fmt.Println(ui.HeaderStyle.Render(" Zenith AI Suggestion "))
 		fmt.Println("Analyzing tasks and habits... Please wait.")
 
-		tasks, err := store.GetTasks()
+		overview, err := app.Overview()
 		if err != nil {
 			return err
 		}
-
-		habits, err := store.GetHabits()
-		if err != nil {
-			return err
-		}
+		tasks, habits := overview.Tasks, overview.Habits
 
 		suggestion, err := ai.SuggestTasks(tasks, habits)
 		if err != nil {
@@ -48,15 +44,11 @@ var aiSummaryCmd = &cobra.Command{
 		fmt.Println(ui.HeaderStyle.Render(" Zenith AI Daily Summary "))
 		fmt.Println("Analyzing accomplishments... Please wait.")
 
-		tasks, err := store.GetTasks()
+		overview, err := app.Overview()
 		if err != nil {
 			return err
 		}
-
-		habits, err := store.GetHabits()
-		if err != nil {
-			return err
-		}
+		tasks, habits := overview.Tasks, overview.Habits
 
 		summaryText, err := ai.GenerateSummary(tasks, habits)
 		if err != nil {

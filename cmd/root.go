@@ -14,7 +14,6 @@ import (
 )
 
 var (
-	store   storage.Store
 	app     *core.Core
 	Version = "v0.1.2"
 )
@@ -29,7 +28,6 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		store = s
 		app = core.New(s, core.SystemClock{}, notify.System())
 
 		// Don't run passive check for the timer daemon itself to avoid loops

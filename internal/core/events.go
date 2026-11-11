@@ -41,7 +41,9 @@ const (
 const (
 	// ListTasks covers every task-derived view. Finer keys (one per Things-style
 	// list) are added alongside it when the derived lists exist.
-	ListTasks = "tasks"
+	ListTasks    = "tasks"
+	ListProjects = "projects"
+	ListHabits   = "habits"
 )
 
 // TaskChanged is published after a task mutation made through this core.

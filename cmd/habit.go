@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/yalcinumutt/zenith-cli/internal/models"
 )
 
 var habitCmd = &cobra.Command{
@@ -20,11 +19,8 @@ var habitAddCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := strings.Join(args, " ")
-		habit := &models.Habit{
-			Name:      name,
-			Frequency: "daily",
-		}
-		if err := store.AddHabit(habit); err != nil {
+		habit, err := app.Habits.Add(name)
+		if err != nil {
 			return err
 		}
 		fmt.Printf("Habit added with ID: %d\n", habit.ID)
@@ -36,7 +32,7 @@ var habitListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all habits",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		habits, err := store.GetHabits()
+		habits, err := app.Habits.List()
 		if err != nil {
 			return err
 		}
@@ -65,7 +61,7 @@ var habitLogCmd = &cobra.Command{
 			return fmt.Errorf("invalid ID: %w", err)
 		}
 
-		if err := store.LogHabit(id); err != nil {
+		if err := app.Habits.Log(id); err != nil {
 			return err
 		}
 

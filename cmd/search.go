@@ -15,11 +15,11 @@ var searchCmd = &cobra.Command{
 		query := args[0]
 		fmt.Printf("Searching for: %s\n\n", ui.TitleStyle.Render(query))
 
-		// Search Tasks
-		tasks, err := store.SearchTasks(query)
+		result, err := app.Search(query)
 		if err != nil {
 			return err
 		}
+		tasks, habits := result.Tasks, result.Habits
 
 		fmt.Println(ui.TitleStyle.Render("Tasks Found:"))
 		if len(tasks) == 0 {
@@ -30,12 +30,6 @@ var searchCmd = &cobra.Command{
 			}
 		}
 		fmt.Println()
-
-		// Search Habits
-		habits, err := store.SearchHabits(query)
-		if err != nil {
-			return err
-		}
 
 		fmt.Println(ui.TitleStyle.Render("Habits Found:"))
 		if len(habits) == 0 {

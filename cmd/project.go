@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/yalcinumutt/zenith-cli/internal/models"
 )
 
 var projectCmd = &cobra.Command{
@@ -19,10 +18,8 @@ var projectAddCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := strings.Join(args, " ")
-		project := &models.Project{
-			Name: name,
-		}
-		if err := store.AddProject(project); err != nil {
+		project, err := app.Projects.Add(name)
+		if err != nil {
 			return err
 		}
 		fmt.Printf("Project added with ID: %d\n", project.ID)
@@ -34,7 +31,7 @@ var projectListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all projects",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		projects, err := store.GetProjects()
+		projects, err := app.Projects.List()
 		if err != nil {
 			return err
 		}

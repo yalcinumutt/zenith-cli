@@ -269,6 +269,19 @@ func (s *SQLiteStore) GetHabits() ([]models.Habit, error) {
 	return habits, nil
 }
 
+func (s *SQLiteStore) GetHabit(id int64) (*models.Habit, error) {
+	var h models.Habit
+	err := s.q.QueryRow("SELECT id, name, description, frequency, created_at, updated_at FROM habits WHERE id = ?", id).
+		Scan(&h.ID, &h.Name, &h.Description, &h.Frequency, &h.CreatedAt, &h.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &h, nil
+}
+
 func (s *SQLiteStore) LogHabit(habitID int64) error {
 	_, err := s.q.Exec("INSERT INTO habit_logs (habit_id) VALUES (?)", habitID)
 	return err

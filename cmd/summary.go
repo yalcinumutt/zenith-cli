@@ -15,20 +15,11 @@ var summaryCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println(ui.HeaderStyle.Render(" Zenith Daily Summary "))
 
-		projects, err := store.GetProjects()
+		overview, err := app.Overview()
 		if err != nil {
 			return err
 		}
-
-		tasks, err := store.GetTasks()
-		if err != nil {
-			return err
-		}
-
-		habits, err := store.GetHabits()
-		if err != nil {
-			return err
-		}
+		projects, tasks, habits := overview.Projects, overview.Tasks, overview.Habits
 
 		now := time.Now().Format("Monday, 02 Jan 2006")
 		fmt.Printf("Today is %s\n\n", ui.TitleStyle.Render(now))

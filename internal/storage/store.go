@@ -34,6 +34,7 @@ type Store interface {
 	// Habits
 	AddHabit(habit *models.Habit) error
 	GetHabits() ([]models.Habit, error)
+	GetHabit(id int64) (*models.Habit, error) // ErrNotFound when absent
 	LogHabit(habitID int64) error
 
 	// Projects
