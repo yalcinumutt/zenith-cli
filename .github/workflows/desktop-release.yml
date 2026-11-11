@@ -74,7 +74,9 @@ jobs:
         run: choco install nsis -y --no-progress
 
       - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Stamp the version
         run: |

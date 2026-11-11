@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -10,5 +11,17 @@ export default defineConfig({
     port: Number(process.env.WAILS_VITE_PORT) || 9245,
     strictPort: true,
   },
-  plugins: [react(), tailwindcss(), wails("./bindings")],
+  plugins: [
+    react(),
+    tailwindcss(),
+    wails("./bindings"),
+    {
+      // Vite empties dist/ on every build; keep a tracked placeholder so the Go
+      // shell's //go:embed all:frontend/dist compiles before the front end is built.
+      name: "keep-dist-placeholder",
+      closeBundle() {
+        writeFileSync("dist/.gitkeep", "");
+      },
+    },
+  ],
 });
