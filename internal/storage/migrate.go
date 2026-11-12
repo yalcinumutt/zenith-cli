@@ -551,7 +551,7 @@ func nullInt(v sql.NullInt64) any {
 }
 
 // tombstoneTables are the synced tables with a stamped deleted_at (soft delete).
-var tombstoneTables = []string{"areas", "projects", "headings", "tasks", "tags", "repeaters", "habits", "task_tags"}
+var tombstoneTables = []string{"areas", "projects", "headings", "tasks", "tags", "repeaters", "habits", "habit_logs", "task_tags"}
 
 // stampedEntities lists, for each table, the entity name and the fields that
 // get an initial stamp. Grow-only rows (logs, history) carry a single "_created".

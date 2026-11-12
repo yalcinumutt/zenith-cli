@@ -3,7 +3,7 @@
 import { api } from "../api/client";
 import { useUI, LIST_ORDER, LIST_TITLES, type View } from "../state/ui";
 import {
-  attempt, cycleTheme, deleteSelected, goList, goTo, moveSelection, newArea, newHeading, newProject,
+  attempt, cycleTheme, deleteSelected, goList, goTo, moveSelection, newArea, newHabit, newHeading, newProject,
   moveSelected, openMenuForSelected, promptName, refreshAll, reorderSelected, scheduleSelected, selectedRow, toggleExpanded, toggleSelectedComplete,
 } from "./actions";
 
@@ -36,6 +36,7 @@ export const commands: Command[] = [
     keywords: ["list", "open", "show"],
     run: () => goList(i),
   })),
+  { id: "go-habits", title: "Go to Habits", group: "Navigate", shortcut: "mod+7", keywords: ["habit", "streak", "routine"], run: () => goTo({ kind: "habits" }) },
   { id: "select-next", title: "Select next task", group: "Navigate", shortcut: "arrowdown", when: () => ui().rows.length > 0, run: () => moveSelection(1) },
   { id: "select-prev", title: "Select previous task", group: "Navigate", shortcut: "arrowup", when: () => ui().rows.length > 0, run: () => moveSelection(-1) },
   { id: "palette", title: "Open command palette", group: "Navigate", shortcut: "mod+k", run: () => ui().setPalette(true) },
@@ -63,25 +64,26 @@ export const commands: Command[] = [
   { id: "remind", title: "Add a reminder to task", group: "Task", keywords: ["notify", "alarm"], when: hasSelection, run: () => { const { row } = selectedRow(); if (row) { ui().expand(row.task.id); ui().focusReminder(); } } },
 
   // ---- organise
+  { id: "new-habit", title: "New habit", group: "Organise", keywords: ["routine", "streak"], run: newHabit },
   { id: "new-area", title: "New area", group: "Organise", run: newArea },
   { id: "new-project", title: "New project", group: "Organise", run: () => { const v = currentView(); newProject(v.kind === "area" ? v.id : null); } },
   { id: "new-heading", title: "New heading in this project", group: "Organise", when: inProject, run: () => { const v = currentView(); if (v.kind === "project") newHeading(v.id); } },
   {
     id: "rename-container", title: "Rename this project or area", group: "Organise",
-    when: () => ui().view.kind !== "list",
+    when: () => ui().view.kind === "project" || ui().view.kind === "area",
     run: () => {
       const v = currentView();
-      if (v.kind === "list") return;
+      if (v.kind === "list" || v.kind === "habits") return;
       promptName({ title: "Rename", label: "Name", confirm: "Rename" }, (name) => void attempt(() => (v.kind === "project" ? api.renameProject(v.id, name) : api.renameArea(v.id, name))));
     },
   },
   { id: "complete-project", title: "Complete this project", group: "Organise", when: inProject, run: () => { const v = currentView(); if (v.kind === "project") void attempt(async () => { await api.completeProject(v.id); goTo({ kind: "list", list: "today" }); }); } },
   {
     id: "delete-container", title: "Delete this project or area", group: "Organise",
-    when: () => ui().view.kind !== "list",
+    when: () => ui().view.kind === "project" || ui().view.kind === "area",
     run: () => {
       const v = currentView();
-      if (v.kind === "list") return;
+      if (v.kind === "list" || v.kind === "habits") return;
       ui().openDialog({
         kind: "confirm", title: `Delete ${v.kind}`, confirm: "Delete", danger: true,
         message: v.kind === "project" ? "This deletes the project with its headings and every task in it." : "The area is removed; its projects become standalone and its tasks unfiled.",

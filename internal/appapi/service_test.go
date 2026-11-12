@@ -220,3 +220,45 @@ func TestChangeEventConversion(t *testing.T) {
 		}
 	}
 }
+
+func TestHabitDaysTickAndUntick(t *testing.T) {
+	s, _ := newService(t) // the clock is 2026-03-01 09:00 UTC
+	h, err := s.AddHabit("  Read  ")
+	if err != nil || h.Name != "Read" {
+		t.Fatalf("add = %+v, %v", h, err)
+	}
+	if _, err := s.AddHabit("  "); err == nil {
+		t.Fatal("blank habit name accepted")
+	}
+
+	for _, day := range []string{"2026-03-01", "2026-02-27", "2026-02-27"} { // ticking twice is idempotent
+		if err := s.SetHabitDay(h.ID, day, true); err != nil {
+			t.Fatalf("tick %s: %v", day, err)
+		}
+	}
+	hs, err := s.Habits()
+	if err != nil || len(hs) != 1 || strings.Join(hs[0].Days, ",") != "2026-02-27,2026-03-01" {
+		t.Fatalf("habits = %+v, %v", hs, err)
+	}
+
+	if err := s.SetHabitDay(h.ID, "2026-03-02", true); err == nil {
+		t.Fatal("future day accepted")
+	}
+	if err := s.SetHabitDay(h.ID, "2026-02-27", false); err != nil {
+		t.Fatal(err)
+	}
+	hs, _ = s.Habits()
+	if strings.Join(hs[0].Days, ",") != "2026-03-01" {
+		t.Fatalf("after untick: %+v", hs[0].Days)
+	}
+
+	if err := s.RenameHabit(h.ID, "Read 20 pages"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteHabit(h.ID); err != nil {
+		t.Fatal(err)
+	}
+	if hs, _ = s.Habits(); len(hs) != 0 {
+		t.Fatalf("deleted habit still listed: %+v", hs)
+	}
+}

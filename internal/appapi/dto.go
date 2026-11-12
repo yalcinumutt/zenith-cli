@@ -19,6 +19,14 @@ type Counts struct {
 	Upcoming int `json:"upcoming"`
 }
 
+// HabitDTO is a habit with the days it was done (YYYY-MM-DD, local, oldest first).
+type HabitDTO struct {
+	ID   int64    `json:"id"`
+	UUID string   `json:"uuid"`
+	Name string   `json:"name"`
+	Days []string `json:"days"`
+}
+
 type TagDTO struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`

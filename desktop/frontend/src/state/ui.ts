@@ -12,14 +12,17 @@ export const LIST_TITLES: Record<ListId, string> = {
 export type View =
   | { kind: "list"; list: ListId }
   | { kind: "project"; id: number }
-  | { kind: "area"; id: number };
+  | { kind: "area"; id: number }
+  | { kind: "habits" };
 
 export function viewKey(v: View): string {
+  if (v.kind === "habits") return "habits";
   return v.kind === "list" ? v.list : `${v.kind}:${v.id}`;
 }
 
 export function parseView(key: string | undefined): View {
   if (key && (LIST_ORDER as string[]).includes(key)) return { kind: "list", list: key as ListId };
+  if (key === "habits") return { kind: "habits" };
   const m = /^(project|area):(\d+)$/.exec(key ?? "");
   if (m) return { kind: m[1] as "project" | "area", id: Number(m[2]) };
   return { kind: "list", list: "today" };

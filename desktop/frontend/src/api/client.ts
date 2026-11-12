@@ -7,6 +7,7 @@ import type {
   AreaDTO,
   ChangeEvent,
   Counts,
+  HabitDTO,
   HeadingDTO,
   Info,
   NewTask,
@@ -22,6 +23,8 @@ import type {
 
 export type { Counts, HeadingDTO as Heading, Info, NewTask, Place, Prefs, ReminderDTO as Reminder, RepeatDTO as Repeat, TagDTO as Tag, TaskPatch, ChangeEvent };
 
+/** A habit with the days it was done (YYYY-MM-DD, oldest first). */
+export type Habit = Omit<HabitDTO, "days"> & { days: string[] };
 export type Task = Omit<TaskDTO, "tags"> & { tags: TagDTO[] };
 export type Project = ProjectDTO;
 export type Area = Omit<AreaDTO, "projects"> & { projects: ProjectDTO[] };
@@ -92,6 +95,12 @@ export const api = {
 
   addReminder: (taskId: number | null, title: string, atIso: string): Promise<ReminderDTO> => Svc.AddReminder(taskId, title, atIso),
   pendingReminders: async (): Promise<ReminderDTO[]> => (await Svc.PendingReminders()) ?? [],
+
+  habits: async (): Promise<Habit[]> => ((await Svc.Habits()) ?? []).map((h) => ({ ...h, days: h.days ?? [] })),
+  addHabit: async (name: string): Promise<Habit> => ({ ...(await Svc.AddHabit(name)), days: [] }),
+  renameHabit: (id: number, name: string): Promise<void> => Svc.RenameHabit(id, name),
+  deleteHabit: (id: number): Promise<void> => Svc.DeleteHabit(id),
+  setHabitDay: (id: number, day: string, done: boolean): Promise<void> => Svc.SetHabitDay(id, day, done),
 
   getPrefs: (): Promise<Prefs> => Svc.GetPrefs(),
   setPrefs: (p: Prefs): Promise<Prefs> => Svc.SetPrefs(p),

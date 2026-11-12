@@ -1,7 +1,7 @@
 // Everything the UI can do, as plain functions over the API client and the UI
 // store. Commands (the palette, shortcuts, menus) and components both call these,
 // so an action behaves identically however it is triggered.
-import { api, type NewTask, type Task } from "../api/client";
+import { api, type Habit, type NewTask, type Task } from "../api/client";
 import { queryClient, keys } from "../state/queries";
 import { useUI, LIST_ORDER, LIST_TITLES, viewKey, type View } from "../state/ui";
 import { addDays, nextMonday } from "../lib/dates";
@@ -143,6 +143,7 @@ export function deleteSelected(): void {
 export function newTaskDefaults(view: View, today: string): Partial<NewTask> {
   if (view.kind === "project") return { projectId: view.id };
   if (view.kind === "area") return { areaId: view.id };
+  if (view.kind === "habits") return {};
   switch (view.list) {
     case "today": return { whenKind: "scheduled", whenDate: today };
     case "upcoming": return { whenKind: "scheduled", whenDate: addDays(today, 1) };
@@ -183,6 +184,31 @@ export function newArea(): void {
 
 export function newHeading(projectId: number): void {
   promptName({ title: "New heading", label: "Heading", confirm: "Add" }, (title) => void attempt(() => api.addHeading(projectId, title)));
+}
+
+/** Tick or un-tick a habit on a day. The cache updates at once; a refusal from the core rolls it back. */
+export async function toggleHabitDay(habit: Habit, day: string): Promise<void> {
+  const done = !habit.days.includes(day);
+  queryClient.setQueryData<Habit[]>(keys.habits, (old) =>
+    old?.map((h) => (h.id !== habit.id ? h : { ...h, days: done ? [...h.days, day].sort() : h.days.filter((d) => d !== day) })));
+  const ok = await attempt(async () => { await api.setHabitDay(habit.id, day, done); return true; });
+  if (!ok) void queryClient.invalidateQueries({ queryKey: keys.habits });
+}
+
+export function newHabit(): void {
+  promptName({ title: "New habit", label: "Habit name", confirm: "Add" }, (name) => void attempt(() => api.addHabit(name)));
+}
+
+export function renameHabit(habit: Habit): void {
+  promptName({ title: "Rename habit", label: "Habit name", initial: habit.name, confirm: "Rename" }, (name) => void attempt(() => api.renameHabit(habit.id, name)));
+}
+
+export function deleteHabit(habit: Habit, then?: () => void): void {
+  ui().openDialog({
+    kind: "confirm", title: "Delete habit", confirm: "Delete", danger: true,
+    message: `Delete “${habit.name}” and its history? This can’t be undone.`,
+    onConfirm: () => void attempt(async () => { await api.deleteHabit(habit.id); then?.(); }),
+  });
 }
 
 export function cycleTheme(): void {

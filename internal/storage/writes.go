@@ -1,6 +1,10 @@
 package storage
 
-import "github.com/yalcinumutt/zenith-cli/internal/models"
+import (
+	"time"
+
+	"github.com/yalcinumutt/zenith-cli/internal/models"
+)
 
 var _ = models.StatusOpen
 
@@ -41,6 +45,22 @@ func (s *SQLiteStore) AddHabit(habit *models.Habit) error {
 
 func (s *SQLiteStore) LogHabit(habitID int64) error {
 	return s.write(func(st *SQLiteStore) error { return st.logHabit(habitID) })
+}
+
+func (s *SQLiteStore) UpdateHabit(habit *models.Habit) error {
+	return s.write(func(st *SQLiteStore) error { return st.updateHabit(habit) })
+}
+
+func (s *SQLiteStore) DeleteHabit(id int64) error {
+	return s.write(func(st *SQLiteStore) error { return st.softDelete("habits", "habit", id) })
+}
+
+func (s *SQLiteStore) LogHabitAt(habitID int64, at time.Time) error {
+	return s.write(func(st *SQLiteStore) error { return st.logHabitAt(habitID, at) })
+}
+
+func (s *SQLiteStore) DeleteHabitLog(id int64) error {
+	return s.write(func(st *SQLiteStore) error { return st.softDelete("habit_logs", "habit_log", id) })
 }
 
 func (s *SQLiteStore) AddProject(project *models.Project) error {

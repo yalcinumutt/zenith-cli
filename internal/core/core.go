@@ -67,7 +67,7 @@ func New(store storage.Store, clock Clock, notifier Notifier) *Core {
 		Projects:  &ProjectService{store: store, clock: clock, bus: b, tasks: tasks},
 		Headings:  &HeadingService{store: store, clock: clock, bus: b, tasks: tasks},
 		Reminders: &ReminderService{store: store, clock: clock, notifier: notifier, bus: b},
-		Habits:    &HabitService{store: store, bus: b},
+		Habits:    &HabitService{store: store, bus: b, clock: clock},
 		Tags:      &TagService{store: store, bus: b},
 		Lists:     &ListService{store: store, clock: clock},
 		Repeaters: &RepeaterService{store: store, tasks: tasks},

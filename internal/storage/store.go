@@ -47,6 +47,13 @@ type Store interface {
 	GetHabits() ([]models.Habit, error)
 	GetHabit(id int64) (*models.Habit, error) // ErrNotFound when absent
 	LogHabit(habitID int64) error
+	UpdateHabit(habit *models.Habit) error
+	DeleteHabit(id int64) error // tombstones the habit; its logs stop showing
+	// LogHabitAt records a completion at a given instant (a past day ticked in the UI).
+	LogHabitAt(habitID int64, at time.Time) error
+	// GetHabitLogs returns the live logs of live habits with from <= completed_at < to.
+	GetHabitLogs(from, to time.Time) ([]models.HabitLog, error)
+	DeleteHabitLog(id int64) error // tombstones one completion (un-ticking a day)
 
 	// Projects
 	AddProject(project *models.Project) error

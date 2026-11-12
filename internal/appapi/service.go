@@ -553,3 +553,43 @@ func ToChangeEvent(e core.Event) (ChangeEvent, bool) {
 	}
 	return ChangeEvent{}, false
 }
+
+// habitHistoryDays is how far back the habit views can look: the heatmap's 26
+// weeks plus room to page back through months on the calendar.
+const habitHistoryDays = 400
+
+func (s *Service) Habits() ([]HabitDTO, error) {
+	hs, err := s.core.Habits.List()
+	if err != nil {
+		return nil, err
+	}
+	days, err := s.core.Habits.Days(habitHistoryDays)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]HabitDTO, 0, len(hs))
+	for _, h := range hs {
+		d := days[h.ID]
+		if d == nil {
+			d = []string{}
+		}
+		out = append(out, HabitDTO{ID: h.ID, UUID: h.UUID, Name: h.Name, Days: d})
+	}
+	return out, nil
+}
+
+func (s *Service) AddHabit(name string) (HabitDTO, error) {
+	h, err := s.core.Habits.Add(name)
+	if err != nil {
+		return HabitDTO{}, err
+	}
+	return HabitDTO{ID: h.ID, UUID: h.UUID, Name: h.Name, Days: []string{}}, nil
+}
+
+func (s *Service) RenameHabit(id int64, name string) error { return s.core.Habits.Rename(id, name) }
+func (s *Service) DeleteHabit(id int64) error              { return s.core.Habits.Delete(id) }
+
+// SetHabitDay ticks or un-ticks a habit on one day (YYYY-MM-DD, not in the future).
+func (s *Service) SetHabitDay(id int64, day string, done bool) error {
+	return s.core.Habits.SetDay(id, day, done)
+}

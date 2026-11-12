@@ -17,6 +17,7 @@ export const keys = {
   area: (id: number) => ["area", id] as const,
   subtasks: (id: number) => ["subtasks", id] as const,
   reminders: ["reminders"] as const,
+  habits: ["habits"] as const,
 };
 
 export const useInfo = () => useQuery({ queryKey: keys.info, queryFn: api.info, staleTime: 30_000, refetchInterval: 60_000 });
@@ -29,6 +30,7 @@ export const useProjectView = (id: number) => useQuery({ queryKey: keys.project(
 export const useAreaView = (id: number) => useQuery({ queryKey: keys.area(id), queryFn: () => api.areaView(id) });
 export const useSubtasks = (id: number, enabled: boolean) =>
   useQuery({ queryKey: keys.subtasks(id), queryFn: () => api.subtasks(id), enabled });
+export const useHabits = () => useQuery({ queryKey: keys.habits, queryFn: api.habits });
 export const usePendingReminders = () => useQuery({ queryKey: keys.reminders, queryFn: api.pendingReminders });
 
 /**

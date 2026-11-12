@@ -11,6 +11,7 @@ import { isTyping, matches } from "./lib/platform";
 import { parseView, useUI, type Theme } from "./state/ui";
 import { AreaView } from "./views/AreaView";
 import { ListView } from "./views/ListView";
+import { HabitsView } from "./views/HabitsView";
 import { ProjectView } from "./views/ProjectView";
 
 /** Apply the theme: the stored override, or the system setting when it is "system". */
@@ -72,6 +73,7 @@ export default function App() {
         <div className="mx-auto max-w-2xl px-10 pb-40 pt-12">
           {view.kind === "list" && <ListView key={view.list} list={view.list} />}
           {view.kind === "project" && <ProjectView key={`p${view.id}`} id={view.id} />}
+          {view.kind === "habits" && <HabitsView />}
           {view.kind === "area" && <AreaView key={`a${view.id}`} id={view.id} />}
         </div>
       </main>

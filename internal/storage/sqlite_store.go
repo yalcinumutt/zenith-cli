@@ -309,7 +309,7 @@ func (s *SQLiteStore) addHabit(habit *models.Habit) error {
 }
 
 func (s *SQLiteStore) GetHabits() ([]models.Habit, error) {
-	rows, err := s.q.Query("SELECT id, uuid, name, description, frequency, created_at, updated_at FROM habits WHERE deleted_at IS NULL")
+	rows, err := s.q.Query("SELECT id, uuid, name, description, frequency, created_at, updated_at FROM habits WHERE deleted_at IS NULL ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -345,6 +345,42 @@ func (s *SQLiteStore) logHabit(habitID int64) error {
 		return err
 	}
 	return s.stamp("habit_log", u, "_created")
+}
+
+func (s *SQLiteStore) updateHabit(h *models.Habit) error {
+	if err := s.stampDiff("habits", "habit", h.ID, habitCols, map[string]string{"name": h.Name, "description": h.Description, "frequency": h.Frequency}); err != nil {
+		return err
+	}
+	_, err := s.q.Exec("UPDATE habits SET name = ?, description = ?, frequency = ?, updated_at = COALESCE(?, CURRENT_TIMESTAMP) WHERE id = ?", h.Name, h.Description, h.Frequency, stamp(h.UpdatedAt), h.ID)
+	return err
+}
+
+func (s *SQLiteStore) logHabitAt(habitID int64, at time.Time) error {
+	u := newUUID()
+	if _, err := s.q.Exec("INSERT INTO habit_logs (uuid, habit_id, completed_at) VALUES (?, ?, ?)", u, habitID, formatTime(at)); err != nil {
+		return err
+	}
+	return s.stamp("habit_log", u, "_created")
+}
+
+func (s *SQLiteStore) GetHabitLogs(from, to time.Time) ([]models.HabitLog, error) {
+	rows, err := s.q.Query(`SELECT l.id, l.uuid, l.habit_id, l.completed_at FROM habit_logs l
+		JOIN habits h ON h.id = l.habit_id AND h.deleted_at IS NULL
+		WHERE l.deleted_at IS NULL AND l.completed_at >= ? AND l.completed_at < ?
+		ORDER BY l.completed_at`, formatTime(from), formatTime(to))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var logs []models.HabitLog
+	for rows.Next() {
+		var l models.HabitLog
+		if err := rows.Scan(&l.ID, &l.UUID, &l.HabitID, &l.CompletedAt); err != nil {
+			return nil, err
+		}
+		logs = append(logs, l)
+	}
+	return logs, rows.Err()
 }
 
 func (s *SQLiteStore) addProject(project *models.Project) error {
