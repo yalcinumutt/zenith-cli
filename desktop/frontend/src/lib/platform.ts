@@ -44,5 +44,7 @@ export function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el) return false;
   const tag = el.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable) return true;
+  // Inside an open menu, listbox or dialog the keys belong to that widget (type-ahead, accelerators).
+  return !!el.closest?.('[role="menu"],[role="listbox"],[role="combobox"],[role="dialog"],[role="alertdialog"]');
 }

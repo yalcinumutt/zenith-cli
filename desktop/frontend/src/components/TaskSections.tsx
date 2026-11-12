@@ -1,8 +1,12 @@
 import {
   DndContext, KeyboardSensor, PointerSensor, closestCenter, useDroppable, useSensor, useSensors,
-  type DragEndEvent, type DragOverEvent, type DragStartEvent,
+  type CollisionDetection, type DragEndEvent, type DragOverEvent, type DragStartEvent,
 } from "@dnd-kit/core";
-import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { GripVertical } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { pointerOnly } from "@/lib/utils";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, type Task } from "../api/client";
 import { attempt } from "../commands/actions";
@@ -22,6 +26,14 @@ export interface Section {
   /** Text for an empty section; if omitted an empty section is not drawn. */
   empty?: string;
 }
+
+const headingId = (id: number) => `heading:${id}`;
+
+// A heading drag only collides with other headings; a task drag ignores them.
+const collide: CollisionDetection = (args) => {
+  const heading = args.active.data.current?.type === "heading";
+  return closestCenter({ ...args, droppableContainers: args.droppableContainers.filter((c) => (c.data.current?.type === "heading") === heading) });
+};
 
 interface Props {
   sections: Section[];
@@ -43,6 +55,7 @@ export function TaskSections({ sections, showProject, showWhen, emptyText }: Pro
   );
   const [overId, setOverId] = useState<number | string | null>(null);
   const [activeId, setActiveId] = useState<number | null>(null);
+  const [activeHeading, setActiveHeading] = useState<string | null>(null);
 
   // Publish what is on screen so keyboard navigation and Mod+Up/Down know the order.
   const rows: Row[] = useMemo(() => sections.flatMap((s) => s.tasks.map((task) => ({ task, section: s.key }))), [sections]);
@@ -50,9 +63,25 @@ export function TaskSections({ sections, showProject, showWhen, emptyText }: Pro
 
   const sectionOf = (taskId: number) => sections.find((s) => s.tasks.some((t) => t.id === taskId));
 
+  const headed = sections.filter((s) => typeof s.heading === "number");
+
+  /** Reorder a heading among its siblings. */
+  function endHeadingDrag(e: DragEndEvent) {
+    if (!e.over || e.over.id === e.active.id) return;
+    const id = Number(String(e.active.id).slice("heading:".length));
+    const over = Number(String(e.over.id).slice("heading:".length));
+    const ids = headed.map((s) => s.heading as number);
+    const ordered = ids.filter((n) => n !== id);
+    const overIndex = ordered.indexOf(over);
+    const slot = ids.indexOf(id) < ids.indexOf(over) ? overIndex + 1 : overIndex;
+    void attempt(() => api.reorderHeading(id, ordered[slot - 1] ?? null, ordered[slot] ?? null));
+  }
+
   function handleEnd(e: DragEndEvent) {
     setOverId(null);
     setActiveId(null);
+    setActiveHeading(null);
+    if (e.active.data.current?.type === "heading") { endHeadingDrag(e); return; }
     if (!e.over) return;
     const id = Number(e.active.id);
     const source = sectionOf(id);
@@ -91,16 +120,20 @@ export function TaskSections({ sections, showProject, showWhen, emptyText }: Pro
   }
 
   const handleOver = (e: DragOverEvent) => setOverId(e.over ? e.over.id : null);
-  const handleStart = (e: DragStartEvent) => setActiveId(Number(e.active.id));
+  const handleStart = (e: DragStartEvent) => {
+    if (e.active.data.current?.type === "heading") setActiveHeading(String(e.active.id));
+    else setActiveId(Number(e.active.id));
+  };
 
   const total = sections.reduce((n, s) => n + s.tasks.length, 0);
   const visible = sections.filter((s) => s.tasks.length > 0 || s.empty || s.title);
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleStart} onDragOver={handleOver} onDragEnd={handleEnd} onDragCancel={() => { setOverId(null); setActiveId(null); }}>
-      {total === 0 && sections.every((s) => !s.title) && <p className="py-6 text-sm text-muted">{emptyText}</p>}
+    <DndContext sensors={sensors} collisionDetection={collide} onDragStart={handleStart} onDragOver={handleOver} onDragEnd={handleEnd} onDragCancel={() => { setOverId(null); setActiveId(null); setActiveHeading(null); }}>
+      {total === 0 && sections.every((s) => !s.title) && <p className="py-6 text-sm text-muted-foreground">{emptyText}</p>}
+      <SortableContext items={headed.map((s) => headingId(s.heading as number))} strategy={verticalListSortingStrategy}>
       {visible.map((s) => (
-        <SectionBlock key={s.key} section={s}>
+        <SectionBlock key={s.key} section={s} lifted={activeHeading !== null && activeHeading === (typeof s.heading === "number" ? headingId(s.heading) : null)}>
           <SortableContext items={s.tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
             {s.tasks.map((t) => {
               const isOver = overId === t.id && activeId !== null && activeId !== t.id;
@@ -112,20 +145,47 @@ export function TaskSections({ sections, showProject, showWhen, emptyText }: Pro
               );
             })}
           </SortableContext>
-          {s.tasks.length === 0 && s.empty && <p className="py-2 pl-3 text-sm text-muted">{s.empty}</p>}
+          {s.tasks.length === 0 && s.empty && <p className="py-2 pl-3 text-sm text-muted-foreground">{s.empty}</p>}
         </SectionBlock>
       ))}
+      </SortableContext>
     </DndContext>
   );
 }
 
-function SectionBlock({ section, children }: { section: Section; children: ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `section:${section.key}` });
+function SectionBlock({ section, children, lifted }: { section: Section; children: ReactNode; lifted: boolean }) {
+  const { setNodeRef: dropRef, isOver } = useDroppable({ id: `section:${section.key}`, data: { type: "section" } });
+  const sortable = typeof section.heading === "number";
+  // Sortable only for real headings; the loose "no heading" block stays first. The hook is
+  // always called, and disabled for the loose block.
+  const { attributes, listeners, setNodeRef: sortRef, setActivatorNodeRef, transform, transition } = useSortable({
+    id: sortable ? headingId(section.heading as number) : `loose:${section.key}`,
+    data: { type: "heading" },
+    disabled: !sortable,
+  });
   return (
-    <section ref={setNodeRef} className={`mb-6 rounded-xl ${isOver && section.tasks.length === 0 ? "bg-selected" : ""}`} aria-label={typeof section.title === "string" ? section.title : undefined}>
+    <section
+      ref={(el) => { dropRef(el); sortRef(el); }}
+      style={sortable ? { transform: CSS.Transform.toString(transform), transition } : undefined}
+      className={`group/heading relative mb-6 rounded-xl ${lifted ? "opacity-40" : ""} ${isOver && section.tasks.length === 0 ? "bg-accent" : ""}`}
+      aria-label={typeof section.title === "string" ? section.title : undefined}
+    >
       {section.title && (
-        <div className="mb-1 flex items-center justify-between border-b border-line pb-1.5 pt-2">
-          <h2 className="text-[13px] font-semibold">{section.title}</h2>
+        <div {...(sortable ? pointerOnly(listeners) : {})} className="relative mb-1 flex items-center justify-between border-b border-border pb-1.5 pt-2">
+          {sortable && (
+            <Button
+              ref={setActivatorNodeRef}
+              {...attributes}
+              {...listeners}
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`Reorder heading ${typeof section.title === "string" ? section.title : ""}`}
+              className="absolute -left-7 top-2 hidden cursor-grab text-muted-foreground focus-visible:flex group-hover/heading:flex"
+            >
+              <GripVertical />
+            </Button>
+          )}
+          <h2 className="text-sm font-semibold">{section.title}</h2>
           {section.actions}
         </div>
       )}

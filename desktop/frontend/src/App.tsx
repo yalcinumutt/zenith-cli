@@ -3,8 +3,10 @@ import { api } from "./api/client";
 import { commands } from "./commands/registry";
 import { CommandPalette } from "./components/CommandPalette";
 import { Dialogs } from "./components/Dialogs";
+import { MovePicker } from "./components/MovePicker";
 import { Sidebar } from "./components/Sidebar";
-import { Toast } from "./components/Toast";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { isTyping, matches } from "./lib/platform";
 import { parseView, useUI, type Theme } from "./state/ui";
 import { AreaView } from "./views/AreaView";
@@ -28,7 +30,7 @@ function useShortcuts() {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.isComposing) return;
       const ui = useUI.getState();
-      const dialogOpen = ui.dialog !== null || ui.paletteOpen;
+      const dialogOpen = ui.dialog !== null || ui.paletteOpen || ui.moveTaskId !== null;
       const typing = isTyping(e.target);
       for (const c of commands) {
         if (!c.shortcut || !matches(e, c.shortcut)) continue;
@@ -63,7 +65,8 @@ export default function App() {
   }, []);
 
   return (
-    <div className="flex h-full bg-bg text-fg">
+    <TooltipProvider>
+    <div className="flex h-full bg-background text-foreground">
       <Sidebar />
       <main className="flex-1 overflow-auto" aria-label="Tasks" onClick={(e) => { if (e.target === e.currentTarget) useUI.getState().select(null); }}>
         <div className="mx-auto max-w-2xl px-10 pb-40 pt-12">
@@ -73,8 +76,10 @@ export default function App() {
         </div>
       </main>
       <CommandPalette />
+      <MovePicker />
       <Dialogs />
-      <Toast />
+      <Toaster position="top-center" />
     </div>
+    </TooltipProvider>
   );
 }

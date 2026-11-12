@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { create } from "zustand";
 import type { Task } from "../api/client";
 
@@ -29,6 +30,7 @@ export type Theme = "system" | "light" | "dark";
 export type Dialog =
   | { kind: "prompt"; title: string; label: string; initial?: string; confirm: string; onSubmit: (value: string) => void }
   | { kind: "confirm"; title: string; message: string; confirm: string; danger?: boolean; onConfirm: () => void }
+  | { kind: "date"; title: string; initial: string; confirm: string; onSubmit: (date: string) => void }
   | { kind: "about" };
 
 /** A row currently on screen, in display order, with the section it sits in. */
@@ -38,6 +40,8 @@ export interface Row {
 }
 
 interface UIState {
+  moveTaskId: number | null;
+  setMoveTask: (id: number | null) => void;
   view: View;
   setView: (v: View) => void;
   selectedId: number | null;
@@ -57,11 +61,12 @@ interface UIState {
   focusReminder: () => void;
   dialog: Dialog | null;
   openDialog: (d: Dialog | null) => void;
-  toast: { text: string; id: number } | null;
   flash: (text: string) => void;
 }
 
 export const useUI = create<UIState>((set) => ({
+  moveTaskId: null,
+  setMoveTask: (moveTaskId) => set({ moveTaskId }),
   view: { kind: "list", list: "today" },
   setView: (view) => set({ view, selectedId: null, expandedId: null }),
   selectedId: null,
@@ -80,6 +85,5 @@ export const useUI = create<UIState>((set) => ({
   focusReminder: () => set((s) => ({ reminderFocus: s.reminderFocus + 1 })),
   dialog: null,
   openDialog: (dialog) => set({ dialog }),
-  toast: null,
-  flash: (text) => set({ toast: { text, id: Date.now() } }),
+  flash: (text) => void toast(text),
 }));

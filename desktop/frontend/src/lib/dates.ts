@@ -3,10 +3,19 @@
 
 const parse = (d: string): Date => new Date(`${d}T00:00:00`);
 
+/** A YYYY-MM-DD string as a local Date (for the calendar). */
+export const parseDay = parse;
+
 export function addDays(date: string, n: number): string {
   const d = parse(date);
   d.setDate(d.getDate() + n);
   return fmtISO(d);
+}
+
+/** The next Monday strictly after `date` (so on a Monday it is a week away). */
+export function nextMonday(date: string): string {
+  const dow = parse(date).getDay(); // 0 = Sunday
+  return addDays(date, ((8 - dow) % 7) || 7);
 }
 
 export function fmtISO(d: Date): string {

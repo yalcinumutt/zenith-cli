@@ -1,4 +1,5 @@
-import { Plus } from "lucide-react";
+import { PlusIcon } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { useEffect, useRef, useState } from "react";
 import { createTask } from "../commands/actions";
 import { useInfo } from "../state/queries";
@@ -14,9 +15,9 @@ export function NewTask() {
   useEffect(() => { if (focusTick > 0) ref.current?.focus(); }, [focusTick]);
 
   return (
-    <div className="mt-2 flex items-center gap-3 rounded-lg px-3 py-2 focus-within:bg-hover">
-      <Plus className="h-4 w-4 text-muted" aria-hidden />
-      <input
+    <div className="mt-2 flex items-center gap-3 rounded-lg px-3 py-2 focus-within:bg-muted">
+      <PlusIcon className="size-4 text-muted-foreground" aria-hidden />
+      <Input
         ref={ref}
         aria-label="New to-do"
         placeholder="New to-do"
@@ -30,7 +31,7 @@ export function NewTask() {
             await createTask(t, view, today);
           }
         }}
-        className="w-full bg-transparent text-[15px] outline-none placeholder:text-muted"
+        className="h-8 border-transparent bg-transparent px-0 text-[15px] shadow-none focus-visible:ring-0 dark:bg-transparent"
       />
     </div>
   );

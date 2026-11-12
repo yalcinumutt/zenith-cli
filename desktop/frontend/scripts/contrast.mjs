@@ -31,11 +31,11 @@ const ratio = (a, b) => {
 
 // [foreground, background] token pairs that carry text.
 const pairs = [
-  ["fg", "bg"], ["fg", "sidebar"], ["fg", "card"], ["fg", "selected"], ["fg", "hover"],
-  ["muted", "bg"], ["muted", "sidebar"], ["muted", "card"], ["muted", "selected"], ["muted", "hover"],
-  ["accent", "bg"], ["accent", "sidebar"], ["accent", "card"], ["accent", "selected"],
-  ["danger", "bg"], ["danger", "sidebar"], ["danger", "card"], ["danger", "selected"],
-  ["accent-fg", "accent"],
+  ["foreground", "background"], ["foreground", "sidebar"], ["foreground", "card"], ["foreground", "accent"], ["foreground", "muted"],
+  ["muted-foreground", "background"], ["muted-foreground", "sidebar"], ["muted-foreground", "card"], ["muted-foreground", "accent"], ["muted-foreground", "muted"],
+  ["primary", "background"], ["primary", "sidebar"], ["primary", "card"], ["primary", "accent"],
+  ["destructive", "background"], ["destructive", "sidebar"], ["destructive", "card"], ["destructive", "accent"],
+  ["primary-foreground", "primary"],
 ];
 
 let failed = 0;

@@ -4,10 +4,8 @@ import { api } from "../api/client";
 import { useUI, LIST_ORDER, LIST_TITLES, type View } from "../state/ui";
 import {
   attempt, cycleTheme, deleteSelected, goList, goTo, moveSelection, newArea, newHeading, newProject,
-  promptName, refreshAll, reorderSelected, selectedRow, toggleExpanded, toggleSelectedComplete,
+  moveSelected, openMenuForSelected, promptName, refreshAll, reorderSelected, scheduleSelected, selectedRow, toggleExpanded, toggleSelectedComplete,
 } from "./actions";
-import { addDays } from "../lib/dates";
-import { queryClient, keys } from "../state/queries";
 
 export interface Command {
   id: string;
@@ -27,23 +25,6 @@ const ui = () => useUI.getState();
 const hasSelection = () => selectedRow().row !== undefined;
 const inProject = () => ui().view.kind === "project";
 const currentView = (): View => ui().view;
-
-async function today(): Promise<string> {
-  return (await queryClient.fetchQuery({ queryKey: keys.info, queryFn: api.info, staleTime: 10_000 })).today;
-}
-
-function schedule(kind: "today" | "tomorrow" | "someday" | "anytime"): void {
-  const { row } = selectedRow();
-  if (!row) return;
-  void (async () => {
-    const t = await today();
-    const patch =
-      kind === "today" ? { whenKind: "scheduled", whenDate: t } :
-      kind === "tomorrow" ? { whenKind: "scheduled", whenDate: addDays(t, 1) } :
-      { whenKind: kind, whenDate: "" };
-    await attempt(() => api.updateTask(row.task.id, patch));
-  })();
-}
 
 export const commands: Command[] = [
   // ---- navigate
@@ -69,10 +50,16 @@ export const commands: Command[] = [
   { id: "move-down", title: "Move task down", group: "Task", shortcut: "mod+arrowdown", keywords: ["reorder"], when: hasSelection, run: () => void reorderSelected(1) },
   { id: "delete-task", title: "Delete task", group: "Task", shortcut: "mod+backspace", when: hasSelection, run: deleteSelected },
   { id: "cancel-task", title: "Cancel task", group: "Task", keywords: ["drop"], when: hasSelection, run: () => { const { row } = selectedRow(); if (row) void attempt(() => api.cancel(row.task.id)); } },
-  { id: "when-today", title: "Schedule for today", group: "Task", keywords: ["when", "plan"], when: hasSelection, run: () => schedule("today") },
-  { id: "when-tomorrow", title: "Schedule for tomorrow", group: "Task", keywords: ["when", "plan"], when: hasSelection, run: () => schedule("tomorrow") },
-  { id: "when-someday", title: "Move to Someday", group: "Task", keywords: ["when", "park"], when: hasSelection, run: () => schedule("someday") },
-  { id: "when-anytime", title: "Move to Anytime (unscheduled)", group: "Task", keywords: ["when", "clear"], when: hasSelection, run: () => schedule("anytime") },
+  { id: "task-menu", title: "Task actions menu", group: "Task", shortcut: "w", keywords: ["when", "context", "right click", "schedule"], when: hasSelection, run: openMenuForSelected },
+  { id: "task-menu-key", title: "Task actions menu (menu key)", group: "Task", shortcut: "contextmenu", when: hasSelection, run: openMenuForSelected },
+  { id: "when-today", title: "Schedule for today", group: "Task", shortcut: "t", keywords: ["when", "plan", "focus"], when: hasSelection, run: () => scheduleSelected("today") },
+  { id: "when-evening", title: "Schedule for this evening", group: "Task", shortcut: "e", keywords: ["when", "plan", "tonight"], when: hasSelection, run: () => scheduleSelected("evening") },
+  { id: "when-tomorrow", title: "Schedule for tomorrow", group: "Task", shortcut: "m", keywords: ["when", "plan"], when: hasSelection, run: () => scheduleSelected("tomorrow") },
+  { id: "when-nextweek", title: "Schedule for next Monday", group: "Task", shortcut: "n", keywords: ["when", "plan", "next week"], when: hasSelection, run: () => scheduleSelected("nextweek") },
+  { id: "when-pick", title: "Schedule for a date…", group: "Task", shortcut: "d", keywords: ["when", "plan", "calendar", "pick"], when: hasSelection, run: () => scheduleSelected("pick") },
+  { id: "when-someday", title: "Move to Someday", group: "Task", shortcut: "s", keywords: ["when", "park"], when: hasSelection, run: () => scheduleSelected("someday") },
+  { id: "when-anytime", title: "Move to Anytime (unscheduled)", group: "Task", shortcut: "a", keywords: ["when", "clear"], when: hasSelection, run: () => scheduleSelected("anytime") },
+  { id: "move-task", title: "Move task to project or area…", group: "Task", shortcut: "p", keywords: ["project", "area", "file", "inbox"], when: hasSelection, run: moveSelected },
   { id: "remind", title: "Add a reminder to task", group: "Task", keywords: ["notify", "alarm"], when: hasSelection, run: () => { const { row } = selectedRow(); if (row) { ui().expand(row.task.id); ui().focusReminder(); } } },
 
   // ---- organise

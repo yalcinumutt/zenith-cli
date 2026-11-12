@@ -465,10 +465,33 @@ func (s *Service) AddProject(name string, areaID *int64) (ProjectDTO, error) {
 }
 func (s *Service) RenameProject(id int64, name string) error { return s.core.Projects.Rename(id, name) }
 func (s *Service) MoveProject(id int64, areaID *int64) error { return s.core.Projects.Move(id, areaID) }
-func (s *Service) CompleteProject(id int64) error            { return s.core.Projects.Complete(id) }
-func (s *Service) CancelProject(id int64) error              { return s.core.Projects.Cancel(id) }
-func (s *Service) ReopenProject(id int64) error              { return s.core.Projects.Reopen(id) }
-func (s *Service) DeleteProject(id int64) error              { return s.core.Projects.Delete(id) }
+
+// PlaceProject files a project under an area (or makes it standalone) and puts
+// it between two neighbours, in one drag. SetArea says whether AreaID applies.
+func (s *Service) PlaceProject(id int64, setArea bool, areaID *int64, afterID, beforeID *int64) error {
+	if setArea {
+		if err := s.core.Projects.Move(id, areaID); err != nil {
+			return err
+		}
+	}
+	if afterID == nil && beforeID == nil {
+		return nil
+	}
+	return s.core.Projects.Reorder(id, afterID, beforeID)
+}
+
+func (s *Service) ReorderArea(id int64, afterID, beforeID *int64) error {
+	return s.core.Areas.Reorder(id, afterID, beforeID)
+}
+
+func (s *Service) ReorderHeading(id int64, afterID, beforeID *int64) error {
+	return s.core.Headings.Reorder(id, afterID, beforeID)
+}
+
+func (s *Service) CompleteProject(id int64) error { return s.core.Projects.Complete(id) }
+func (s *Service) CancelProject(id int64) error   { return s.core.Projects.Cancel(id) }
+func (s *Service) ReopenProject(id int64) error   { return s.core.Projects.Reopen(id) }
+func (s *Service) DeleteProject(id int64) error   { return s.core.Projects.Delete(id) }
 
 func (s *Service) AddHeading(projectID int64, title string) (HeadingDTO, error) {
 	h, err := s.core.Headings.Add(projectID, title)

@@ -78,6 +78,10 @@ export const api = {
   addProject: (name: string, areaId: number | null): Promise<Project> => Svc.AddProject(name, areaId),
   renameProject: (id: number, name: string): Promise<void> => Svc.RenameProject(id, name),
   moveProject: (id: number, areaId: number | null): Promise<void> => Svc.MoveProject(id, areaId),
+  placeProject: (id: number, change: { areaId?: number | null; afterId: number | null; beforeId: number | null }): Promise<void> =>
+    Svc.PlaceProject(id, change.areaId !== undefined, change.areaId ?? null, change.afterId, change.beforeId),
+  reorderArea: (id: number, afterId: number | null, beforeId: number | null): Promise<void> => Svc.ReorderArea(id, afterId, beforeId),
+  reorderHeading: (id: number, afterId: number | null, beforeId: number | null): Promise<void> => Svc.ReorderHeading(id, afterId, beforeId),
   completeProject: (id: number): Promise<void> => Svc.CompleteProject(id),
   cancelProject: (id: number): Promise<void> => Svc.CancelProject(id),
   reopenProject: (id: number): Promise<void> => Svc.ReopenProject(id),

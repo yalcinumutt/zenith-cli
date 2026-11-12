@@ -4,7 +4,7 @@
 import { api, type NewTask, type Task } from "../api/client";
 import { queryClient, keys } from "../state/queries";
 import { useUI, LIST_ORDER, LIST_TITLES, viewKey, type View } from "../state/ui";
-import { addDays } from "../lib/dates";
+import { addDays, nextMonday } from "../lib/dates";
 
 const ui = () => useUI.getState();
 
@@ -70,21 +70,73 @@ export async function reorderSelected(delta: -1 | 1): Promise<void> {
   await attempt(() => api.placeTask(row.task.id, { afterId: after, beforeId: before }));
 }
 
-export function deleteSelected(): void {
+export type WhenChoice = "today" | "evening" | "tomorrow" | "nextweek" | "someday" | "anytime";
+
+async function todayString(): Promise<string> {
+  return (await queryClient.fetchQuery({ queryKey: keys.info, queryFn: api.info, staleTime: 10_000 })).today;
+}
+
+/** Schedule a task: today, this evening, tomorrow, next Monday, Someday or Anytime. */
+export async function scheduleTask(task: Task, choice: WhenChoice): Promise<void> {
+  const today = await todayString();
+  const day = choice === "tomorrow" ? addDays(today, 1) : choice === "nextweek" ? nextMonday(today) : today;
+  const patch =
+    choice === "someday" || choice === "anytime" ? { whenKind: choice, whenDate: "", evening: false } :
+    { whenKind: "scheduled", whenDate: day, evening: choice === "evening" };
+  await attempt(() => api.updateTask(task.id, patch));
+}
+
+/** Ask for a date, then schedule the task on it. */
+export function pickDateFor(task: Task): void {
+  void todayString().then((today) => {
+    ui().openDialog({
+      kind: "date", title: "Schedule", confirm: "Schedule", initial: task.whenDate || today,
+      onSubmit: (date) => void attempt(() => api.updateTask(task.id, { whenKind: "scheduled", whenDate: date, evening: false })),
+    });
+  });
+}
+
+export function scheduleSelected(choice: WhenChoice | "pick"): void {
   const { row } = selectedRow();
   if (!row) return;
+  if (choice === "pick") pickDateFor(row.task);
+  else void scheduleTask(row.task, choice);
+}
+
+/** Open the context menu for the selected task, anchored to its row (keyboard route). */
+export function openMenuForSelected(): void {
+  const { row } = selectedRow();
+  if (!row) return;
+  const el = document.querySelector(`[data-task-id="${row.task.id}"]`);
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  // The row's context menu listens for contextmenu; send it one at the row's lower left.
+  el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: r.left + 48, clientY: r.bottom }));
+}
+
+export function moveSelected(): void {
+  const { row } = selectedRow();
+  if (row) ui().setMoveTask(row.task.id);
+}
+
+export function deleteTask(task: Task): void {
   ui().openDialog({
     kind: "confirm",
     title: "Delete task",
-    message: `Delete “${row.task.title}” and its subtasks? This can’t be undone.`,
+    message: `Delete “${task.title}” and its subtasks? This can’t be undone.`,
     confirm: "Delete",
     danger: true,
     onConfirm: () => {
       ui().select(null);
       ui().expand(null);
-      void attempt(() => api.deleteTask(row.task.id));
+      void attempt(() => api.deleteTask(task.id));
     },
   });
+}
+
+export function deleteSelected(): void {
+  const { row } = selectedRow();
+  if (row) deleteTask(row.task);
 }
 
 /** Where a new task lands depends on the view it is created in. */

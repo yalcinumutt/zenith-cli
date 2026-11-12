@@ -1,13 +1,22 @@
-import { Bell, Trash2, X } from "lucide-react";
+import { BellIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, type Repeat, type Task } from "../api/client";
 import { attempt, toggleComplete } from "../commands/actions";
 import { addDays } from "../lib/dates";
 import { useInfo, useSubtasks, useTags } from "../state/queries";
 import { useUI } from "../state/ui";
-import { Button, RoundCheck } from "./ui";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { DatePicker } from "./DatePicker";
+import { RoundCheck } from "./ui";
 
-const field = "rounded-md border border-line bg-bg px-2 py-1 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-accent";
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /** The title while a task is open: an input in place of the row's text. */
@@ -22,7 +31,7 @@ export function TitleEditor({ task }: { task: Task }) {
     void attempt(() => api.updateTask(task.id, { title }));
   };
   return (
-    <input
+    <Input
       ref={ref}
       aria-label="Title"
       value={title}
@@ -31,7 +40,7 @@ export function TitleEditor({ task }: { task: Task }) {
       onChange={(e) => setTitle(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => { if (e.key === "Enter") { commit(); (e.target as HTMLInputElement).blur(); } }}
-      className="w-full bg-transparent text-[15px] leading-snug outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="h-7 border-transparent bg-transparent px-1 text-[15px] leading-snug shadow-none dark:bg-transparent"
     />
   );
 }
@@ -49,25 +58,25 @@ export function TaskCard({ task }: { task: Task }) {
   const save = (patch: Parameters<typeof api.updateTask>[1]) => void attempt(() => api.updateTask(task.id, patch));
 
   return (
-    <div className="space-y-3 px-3 pb-3 pl-[2.9rem] pr-4" onClick={(e) => e.stopPropagation()}>
-      <textarea
+    <div className="flex flex-col gap-3 px-3 pb-3 pl-[2.9rem] pr-4" onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+      <Textarea
         aria-label="Notes"
         placeholder="Notes"
         value={notes}
         rows={notes.split("\n").length > 2 ? 4 : 2}
         onChange={(e) => setNotes(e.target.value)}
         onBlur={() => notes !== task.notes && save({ notes })}
-        className="w-full resize-none bg-transparent text-sm text-fg outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent"
+        className="min-h-0 resize-none border-transparent bg-transparent px-1 shadow-none dark:bg-transparent"
       />
 
-      <div className="space-y-1.5" role="group" aria-label="Checklist">
+      <div className="flex flex-col gap-1.5" role="group" aria-label="Checklist">
         {subtasks.map((s) => (
           <div key={s.id} className="flex items-center gap-2.5">
             <RoundCheck small checked={s.status !== "open"} label={`${s.status === "open" ? "Complete" : "Reopen"} subtask ${s.title}`} onToggle={() => void toggleComplete(s)} />
-            <span className={s.status !== "open" ? "text-sm text-muted line-through" : "text-sm"}>{s.title}</span>
+            <span className={s.status !== "open" ? "text-sm text-muted-foreground line-through" : "text-sm"}>{s.title}</span>
           </div>
         ))}
-        <input
+        <Input
           aria-label="Add a subtask"
           placeholder="Add subtask"
           value={newSub}
@@ -79,28 +88,28 @@ export function TaskCard({ task }: { task: Task }) {
               void attempt(() => api.addTask({ title: text, notes: "", whenKind: "", whenDate: "", deadline: "", evening: false, projectId: null, areaId: null, headingId: null, parentId: task.id, tags: [] }));
             }
           }}
-          className="w-full bg-transparent text-sm outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent"
+          className="h-7 border-transparent bg-transparent px-1 shadow-none dark:bg-transparent"
         />
       </div>
 
       <TagsField task={task} />
 
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line pt-3 text-xs text-muted">
+      <Separator />
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
         <WhenField task={task} today={today} save={save} />
-        <label className="flex items-center gap-1.5">Deadline
-          <input type="date" aria-label="Deadline" value={task.deadline} onChange={(e) => save({ deadline: e.target.value })} className={field} />
-          {task.deadline && <button aria-label="Clear deadline" className="rounded p-0.5 hover:bg-hover" onClick={() => save({ deadline: "" })}><X className="h-3.5 w-3.5" /></button>}
-        </label>
+        <span className="flex items-center gap-1.5">Deadline
+          <DatePicker label="Deadline" placeholder="None" today={today} value={task.deadline} onChange={(d) => save({ deadline: d })} clearable />
+        </span>
         <RepeatField task={task} />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <ReminderField task={task} />
         <div className="flex gap-2">
-          {task.status === "open" && <Button variant="ghost" onClick={() => void attempt(() => api.cancel(task.id))}>Cancel task</Button>}
-          <Button variant="ghost" aria-label="Delete task" onClick={() => {
+          {task.status === "open" && <Button variant="ghost" size="sm" onClick={() => void attempt(() => api.cancel(task.id))}>Cancel task</Button>}
+          <Button variant="ghost" size="icon-sm" aria-label="Delete task" onClick={() => {
             useUI.getState().openDialog({ kind: "confirm", title: "Delete task", message: `Delete “${task.title}” and its subtasks?`, confirm: "Delete", danger: true, onConfirm: () => { useUI.getState().expand(null); void attempt(() => api.deleteTask(task.id)); } });
-          }}><Trash2 className="h-3.5 w-3.5" aria-hidden /></Button>
+          }}><Trash2Icon /></Button>
         </div>
       </div>
     </div>
@@ -120,14 +129,14 @@ function TagsField({ task }: { task: Task }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {task.tags.map((t) => (
-        <span key={t.id} className="flex items-center gap-1 rounded-full bg-hover px-2 py-0.5 text-xs">
+        <Badge key={t.id} variant="secondary" className="gap-1">
           #{t.name}
-          <button aria-label={`Remove tag ${t.name}`} className="rounded hover:text-danger" onClick={() => set(task.tags.filter((x) => x.id !== t.id).map((x) => x.name))}><X className="h-3 w-3" /></button>
-        </span>
+          <button aria-label={`Remove tag ${t.name}`} className="rounded hover:text-destructive" onClick={() => set(task.tags.filter((x) => x.id !== t.id).map((x) => x.name))}><XIcon /></button>
+        </Badge>
       ))}
-      <input aria-label="Add tags" list={listId} placeholder="Add tags" value={text} onChange={(e) => setText(e.target.value)}
+      <Input aria-label="Add tags" list={listId} placeholder="Add tags" value={text} onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(); } }} onBlur={add}
-        className="min-w-24 bg-transparent text-xs outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent" />
+        className="h-6 w-28 border-transparent bg-transparent px-1 text-xs shadow-none dark:bg-transparent" />
       <datalist id={listId}>{all.map((t) => <option key={t.id} value={t.name} />)}</datalist>
     </div>
   );
@@ -154,22 +163,27 @@ function WhenField({ task, today, save }: { task: Task; today: string; save: Sav
   };
   return (
     <span className="flex flex-wrap items-center gap-1.5">
-      <label className="flex items-center gap-1.5">When
-        <select aria-label="When" value={value} onChange={(e) => choose(e.target.value)} className={field}>
-          <option value="anytime">Anytime</option>
-          <option value="today">Today</option>
-          <option value="tomorrow">Tomorrow</option>
-          <option value="date">Pick a date…</option>
-          <option value="someday">Someday</option>
-        </select>
-      </label>
+      When
+      <Select value={value} onValueChange={choose}>
+        <SelectTrigger size="sm" aria-label="When" className="w-36"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectItem value="anytime">Anytime</SelectItem>
+            <SelectItem value="today">Today</SelectItem>
+            <SelectItem value="tomorrow">Tomorrow</SelectItem>
+            <SelectItem value="date">Pick a date…</SelectItem>
+            <SelectItem value="someday">Someday</SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </Select>
       {value === "date" && (
-        <input type="date" aria-label="Scheduled date" value={task.whenDate} onChange={(e) => e.target.value && save({ whenKind: "scheduled", whenDate: e.target.value })} className={field} />
+        <DatePicker label="Scheduled date" today={today} value={task.whenDate} onChange={(d) => d && save({ whenKind: "scheduled", whenDate: d })} />
       )}
       {task.whenKind === "scheduled" && (
-        <label className="flex items-center gap-1.5">
-          <input type="checkbox" checked={task.evening} onChange={(e) => save({ evening: e.target.checked })} /> This evening
-        </label>
+        <span className="flex items-center gap-1.5">
+          <Switch id={`evening-${task.id}`} size="sm" checked={task.evening} onCheckedChange={(c) => save({ evening: c })} />
+          <Label htmlFor={`evening-${task.id}`} className="text-xs font-normal">This evening</Label>
+        </span>
       )}
     </span>
   );
@@ -197,31 +211,33 @@ function RepeatField({ task }: { task: Task }) {
   };
   return (
     <span className="flex flex-wrap items-center gap-1.5">
-      <label className="flex items-center gap-1.5">Repeat
-        <select aria-label="Repeat" value={kind} onChange={(e) => change({ kind: e.target.value })} className={field}>
-          <option value="none">Never</option>
-          <option value="days">Every N days</option>
-          <option value="weeks">Every N weeks</option>
-          <option value="months">Every N months</option>
-        </select>
-      </label>
+      Repeat
+      <Select value={kind} onValueChange={(v) => change({ kind: v })}>
+        <SelectTrigger size="sm" aria-label="Repeat" className="w-36"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectItem value="none">Never</SelectItem>
+            <SelectItem value="days">Every N days</SelectItem>
+            <SelectItem value="weeks">Every N weeks</SelectItem>
+            <SelectItem value="months">Every N months</SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </Select>
       {kind !== "none" && (
-        <input type="number" min={1} max={999} aria-label="Repeat interval" value={interval} onChange={(e) => change({ interval: Number(e.target.value) })} className={`${field} w-16`} />
+        <Input type="number" min={1} max={999} aria-label="Repeat interval" value={interval} onChange={(e) => change({ interval: Number(e.target.value) })} className="h-7 w-16" />
       )}
       {kind === "weeks" && (
-        <span role="group" aria-label="Weekdays" className="flex gap-1">
-          {WEEKDAYS.map((name, d) => (
-            <button key={name} aria-pressed={days.includes(d)} onClick={() => change({ days: days.includes(d) ? days.filter((x) => x !== d) : [...days, d].sort() })}
-              className={`rounded px-1.5 py-0.5 text-[11px] ${days.includes(d) ? "bg-accent text-accent-fg" : "border border-line hover:bg-hover"}`}>{name}</button>
-          ))}
-        </span>
+        <ToggleGroup type="multiple" size="sm" variant="outline" aria-label="Weekdays" value={days.map(String)}
+          onValueChange={(v) => change({ days: v.map(Number).sort() })}>
+          {WEEKDAYS.map((name, d) => <ToggleGroupItem key={name} value={String(d)} aria-label={name} className="px-1.5 text-[11px]">{name}</ToggleGroupItem>)}
+        </ToggleGroup>
       )}
       {kind === "months" && (
-        <label className="flex items-center gap-1.5">on day
-          <input type="number" min={1} max={31} aria-label="Day of month" placeholder="same" value={monthDay || ""} onChange={(e) => change({ monthDay: Number(e.target.value) })} className={`${field} w-16`} />
-        </label>
+        <span className="flex items-center gap-1.5">on day
+          <Input type="number" min={1} max={31} aria-label="Day of month" placeholder="same" value={monthDay || ""} onChange={(e) => change({ monthDay: Number(e.target.value) })} className="h-7 w-16" />
+        </span>
       )}
-      {r && <span className="text-fg">{r.text}</span>}
+      {r && <span className="text-foreground">{r.text}</span>}
     </span>
   );
 }
@@ -244,11 +260,11 @@ function ReminderField({ task }: { task: Task }) {
     if (r) useUI.getState().flash(`Reminder set for ${when.toLocaleString()}`);
   };
   return (
-    <span className="flex items-center gap-1.5 text-xs text-muted">
-      <Bell className="h-3.5 w-3.5" aria-hidden />
-      <input ref={ref} type="datetime-local" aria-label="Reminder time" value={at} onChange={(e) => setAt(e.target.value)} className={field}
+    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <BellIcon className="size-3.5" aria-hidden />
+      <Input ref={ref} type="datetime-local" aria-label="Reminder time" value={at} onChange={(e) => setAt(e.target.value)} className="h-7 w-auto"
         onKeyDown={(e) => { if (e.key === "Enter") void add(); }} />
-      <Button onClick={() => void add()}>Remind me</Button>
+      <Button size="sm" variant="outline" onClick={() => void add()}>Remind me</Button>
     </span>
   );
 }

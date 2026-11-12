@@ -21,7 +21,7 @@ export function ListView({ list }: { list: ListId }) {
     <>
       <h1 className="mb-6 flex items-baseline gap-3 text-3xl font-semibold tracking-tight">
         {LIST_TITLES[list]}
-        {list === "today" && today && <span className="text-sm font-normal text-muted">{new Date(`${today}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</span>}
+        {list === "today" && today && <span className="text-sm font-normal text-muted-foreground">{new Date(`${today}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</span>}
       </h1>
       {list === "today" ? <TodaySections /> : <PlainList list={list} today={today} />}
       {list !== "logbook" && <NewTask />}
@@ -50,5 +50,5 @@ function PlainList({ list, today }: { list: ListId; today: string }) {
     }
     return [{ key: "all", tasks }];
   }, [data, list, today]);
-  return <TaskSections sections={sections} showProject showWhen={list === "anytime" || list === "someday"} emptyText={EMPTY[list]} />;
+  return <TaskSections sections={sections} showProject showWhen={list !== "upcoming"} emptyText={EMPTY[list]} />;
 }
