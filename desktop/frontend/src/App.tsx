@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { toast } from "sonner";
 import { api } from "./api/client";
 import { commands } from "./commands/registry";
 import { CommandPalette } from "./components/CommandPalette";
@@ -51,11 +52,28 @@ function useShortcuts() {
   }, []);
 }
 
+/** Once at startup, tell the user when a newer desktop release exists. Offline is silent. */
+function useUpdateNotice() {
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void api.checkForUpdate().then((u) => {
+        if (!u.available) return;
+        toast(`Zenith ${u.version} is available`, {
+          duration: Infinity,
+          action: { label: "Download", onClick: () => void api.openURL(u.url) },
+        });
+      }).catch(() => undefined);
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, []);
+}
+
 export default function App() {
   const view = useUI((s) => s.view);
   const theme = useUI((s) => s.theme);
   useTheme(theme);
   useShortcuts();
+  useUpdateNotice();
 
   // Restore the last view and theme from the app's own preferences.
   useEffect(() => {

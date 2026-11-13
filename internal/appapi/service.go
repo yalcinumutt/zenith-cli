@@ -22,6 +22,9 @@ type Service struct {
 	clock   core.Clock
 	prefs   *prefsStore
 	version string
+
+	// releasesURL overrides the GitHub releases endpoint (tests only).
+	releasesURL string
 }
 
 // New builds the service. prefsPath may be empty (preferences then stay at defaults).

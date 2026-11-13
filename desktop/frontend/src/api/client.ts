@@ -1,7 +1,7 @@
 // The one module that talks to Go. It is the only importer of the generated
 // bindings (enforced by lint): everything else in the app uses this file's
 // hand-written, null-free types and functions (ADR 0001, ADR 0007).
-import { Events } from "@wailsio/runtime";
+import { Browser, Events } from "@wailsio/runtime";
 import * as Svc from "../../bindings/github.com/yalcinumutt/zenith-cli/internal/appapi/service.js";
 import type {
   AreaDTO,
@@ -19,9 +19,10 @@ import type {
   TagDTO,
   TaskDTO,
   TaskPatch,
+  UpdateInfo,
 } from "../../bindings/github.com/yalcinumutt/zenith-cli/internal/appapi/index.js";
 
-export type { Counts, HeadingDTO as Heading, Info, NewTask, Place, Prefs, ReminderDTO as Reminder, RepeatDTO as Repeat, TagDTO as Tag, TaskPatch, ChangeEvent };
+export type { Counts, HeadingDTO as Heading, Info, NewTask, Place, Prefs, ReminderDTO as Reminder, RepeatDTO as Repeat, TagDTO as Tag, TaskPatch, UpdateInfo, ChangeEvent };
 
 /** A habit with the days it was done (YYYY-MM-DD, oldest first). */
 export type Habit = Omit<HabitDTO, "days"> & { days: string[] };
@@ -40,6 +41,10 @@ const area = (a: AreaDTO): Area => ({ ...a, projects: a.projects ?? [] });
 /** The asynchronous API. Errors reject with the core's message as `Error.message`. */
 export const api = {
   info: (): Promise<Info> => Svc.Info(),
+  /** Newest desktop release if it is newer than this build; rejects when offline. */
+  checkForUpdate: (): Promise<UpdateInfo> => Svc.CheckForUpdate(),
+  /** Open a page in the user's default browser. */
+  openURL: (url: string): Promise<void> => Browser.OpenURL(url),
   counts: (): Promise<Counts> => Svc.Counts(),
 
   today: async (): Promise<Today> => {
