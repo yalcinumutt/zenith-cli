@@ -715,6 +715,19 @@ footer p {
     font-size: 0.9rem;
 }
 
+footer .support-links {
+    margin-bottom: 0.75rem;
+}
+
+footer .support-links a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+footer .support-links a:hover {
+    text-decoration: underline;
+}
+
 /* Typing Caret Animation */
 @keyframes blink {
     from, to { border-color: transparent }
