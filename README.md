@@ -32,18 +32,29 @@ Download it from the [Releases](https://github.com/yalcinumutt/zenith-cli/releas
 | --- | --- | --- |
 | macOS | `Zenith-<version>-macos-arm64.dmg` / `-macos-amd64.dmg` | Open the dmg and drag Zenith to Applications. **Builds may be unsigned**: right-click Zenith, choose **Open**, then **Open** again (once). |
 | Windows 10/11 | `Zenith-<version>-windows-amd64.exe` | Run the installer. SmartScreen may warn because the beta is not signed: "More info" → "Run anyway". |
-| Linux | `Zenith-<version>-linux-amd64.AppImage`, `.deb`, `.rpm` | AppImage: `chmod +x` and run. Needs a recent distribution (GTK 4 and WebKitGTK 6.0). |
+| Linux | *Coming soon* | The Linux desktop build is paused for now. The CLI and TUI work on Linux today. |
 
 **Known limitations**
 
 - It is a beta; expect rough edges.
 - **Reminders only fire while the Zenith app or `zenith daemon` is running.** Closing the window quits the app. Run `zenith timer daemon` in a terminal to keep reminders firing in the background.
-- Linux support is for recent distributions; tray icons and global shortcuts are not in v1.
+- The Linux desktop build is paused (coming soon); tray icons and global shortcuts are not in v1.
 - Device-to-device sync is not in v1 (it is the first planned feature after it).
+
+**What's in the desktop app**
+
+- The six lists, Areas, Projects, Headings and Subtasks, with drag-free reordering of projects, areas and headings, plus a task context menu.
+- A **Habits** section with a daily checklist, a heatmap and insights.
+- An in-app notice when a newer desktop release is available.
 
 Keyboard-first: `⌘/Ctrl+K` opens the command palette, `⌘/Ctrl+N` adds a to-do, `⌘/Ctrl+1…6` jump between the six lists, `Space` expands a task, `x` completes it and `⌘/Ctrl+↑/↓` reorders it.
 
-If you find it useful, please consider [sponsoring the project](https://github.com/sponsors/yalcinumutt).
+## ❤️ Support Zenith
+
+If you find it useful, please consider supporting the project:
+
+- [Patreon](https://www.patreon.com/c/yalcinumutt)
+- [Buy Me a Coffee](https://buymeacoffee.com/yalcinumutt)
 
 ## 🚀 Installation
 
