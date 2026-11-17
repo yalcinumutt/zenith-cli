@@ -42,7 +42,18 @@ export interface Row {
   section: string;
 }
 
+const COLLAPSED_KEY = "zenith.collapsedAreas";
+function loadCollapsed(): number[] {
+  try { const v = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]"); return Array.isArray(v) ? v.filter((n) => typeof n === "number") : []; } catch { return []; }
+}
+function saveCollapsed(ids: number[]): void {
+  try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify(ids)); } catch { /* storage unavailable: collapse state just won't persist */ }
+}
+
 interface UIState {
+  /** Areas folded shut in the sidebar (remembered between launches). */
+  collapsedAreas: number[];
+  setAreaCollapsed: (id: number, collapsed: boolean) => void;
   moveTaskId: number | null;
   setMoveTask: (id: number | null) => void;
   view: View;
@@ -68,6 +79,12 @@ interface UIState {
 }
 
 export const useUI = create<UIState>((set) => ({
+  collapsedAreas: loadCollapsed(),
+  setAreaCollapsed: (id, collapsed) => set((s) => {
+    const next = s.collapsedAreas.filter((n) => n !== id).concat(collapsed ? [id] : []);
+    saveCollapsed(next);
+    return { collapsedAreas: next };
+  }),
   moveTaskId: null,
   setMoveTask: (moveTaskId) => set({ moveTaskId }),
   view: { kind: "list", list: "today" },

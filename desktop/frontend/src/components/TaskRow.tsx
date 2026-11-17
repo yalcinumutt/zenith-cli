@@ -1,8 +1,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { CalendarDays, Flag, Moon, GripVertical, Repeat as RepeatIcon } from "lucide-react";
+import { CalendarDays, Flag, Moon, Repeat as RepeatIcon } from "lucide-react";
 import type { Task } from "../api/client";
 import { toggleComplete } from "../commands/actions";
 import { deadlineLabel, friendlyDay } from "../lib/dates";
@@ -28,7 +27,7 @@ export function TaskRow({ task, section, showProject, showWhen, insertion }: Pro
   const today = useInfo().data?.today ?? "";
   const selected = useUI((s) => s.selectedId === task.id);
   const expanded = useUI((s) => s.expandedId === task.id);
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging, setActivatorNodeRef } = useSortable({ id: task.id, data: { section, type: "task" }, disabled: expanded });
+  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, data: { section, type: "task" }, disabled: expanded });
 
   const done = task.status !== "open";
   const cancelled = task.status === "cancelled";
@@ -52,17 +51,6 @@ export function TaskRow({ task, section, showProject, showWhen, insertion }: Pro
       )}
     >
       <div className="flex items-start gap-3 px-3 py-2.5">
-        <Button
-          ref={setActivatorNodeRef}
-          {...attributes}
-          {...listeners}
-          variant="ghost"
-          size="icon-xs"
-          aria-label={`Reorder ${task.title}`}
-          className="absolute -left-7 top-2.5 hidden cursor-grab text-muted-foreground focus-visible:flex group-hover:flex"
-        >
-          <GripVertical />
-        </Button>
         <RoundCheck
           checked={done}
           label={`${task.status === "open" ? "Complete" : "Reopen"} ${task.title}`}

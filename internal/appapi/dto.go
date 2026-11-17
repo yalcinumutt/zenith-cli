@@ -50,6 +50,7 @@ type TaskDTO struct {
 	WhenKind       string     `json:"whenKind"` // anytime | scheduled | someday
 	WhenDate       string     `json:"whenDate"`
 	Deadline       string     `json:"deadline"`
+	Priority       int        `json:"priority"` // 0 low, 1 medium, 2 high, 3 critical
 	Evening        bool       `json:"evening"`
 	ProjectID      *int64     `json:"projectId"`
 	ProjectName    string     `json:"projectName"`

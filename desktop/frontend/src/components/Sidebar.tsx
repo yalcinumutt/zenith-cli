@@ -4,10 +4,11 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarIcon, CheckCheckIcon, FlameIcon, FolderOpenIcon, GripVerticalIcon, InboxIcon, InfoIcon, LayersIcon, MoonIcon, PlusIcon, StarIcon, SunMoonIcon, type LucideIcon } from "lucide-react";
+import { CalendarIcon, CheckCheckIcon, ChevronRightIcon, FlameIcon, FolderOpenIcon, InboxIcon, InfoIcon, LayersIcon, MoonIcon, PencilIcon, PlusIcon, StarIcon, SunMoonIcon, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import {
   Sidebar as ShadSidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuBadge,
   SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarSeparator,
@@ -15,7 +16,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn, pointerOnly } from "@/lib/utils";
 import { api, type Area, type Project } from "../api/client";
-import { attempt, cycleTheme, goTo, newArea, newProject } from "../commands/actions";
+import { attempt, cycleTheme, goTo, newArea, newProject, promptName } from "../commands/actions";
 import { useCounts, useSidebar } from "../state/queries";
 import { LIST_ORDER, LIST_TITLES, useUI, type ListId, type View } from "../state/ui";
 
@@ -46,18 +47,9 @@ function NavRow({ target, label, icon: Icon, tone, count }: { target: View; labe
   );
 }
 
-/** The hover grip that starts a drag (mouse or keyboard). */
-function Grip({ label, className, ...props }: { label: string; className?: string } & React.ComponentProps<typeof Button>) {
-  return (
-    <Button variant="ghost" size="icon-xs" aria-label={label} className={cn("absolute top-1/2 z-10 hidden -translate-y-1/2 cursor-grab text-muted-foreground focus-visible:flex group-hover/menu-item:flex", className)} {...props}>
-      <GripVerticalIcon />
-    </Button>
-  );
-}
-
 /** A project row that can be dragged to reorder it or to move it into another area. */
 function ProjectItem({ project, containerId, insertion }: { project: Project; containerId: number | null; insertion: "above" | "below" | null }) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
+  const { listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: pid(project.id), data: { type: "project", containerId } });
   return (
     <SidebarMenuItem
@@ -70,7 +62,6 @@ function ProjectItem({ project, containerId, insertion }: { project: Project; co
         insertion === "below" && "after:absolute after:-bottom-px after:left-2 after:right-2 after:h-0.5 after:bg-primary",
       )}
     >
-      <Grip ref={setActivatorNodeRef} {...attributes} {...listeners} label={`Reorder project ${project.name}`} className="-left-1" />
       <NavRow target={{ kind: "project", id: project.id }} label={project.name} icon={FolderOpenIcon} count={project.openTasks} />
     </SidebarMenuItem>
   );
@@ -99,17 +90,40 @@ function ProjectList({ areaId, projects, drag }: { areaId: number | null; projec
 
 /** An area block: a draggable header (reorders areas) over its project list (a drop target for projects). */
 function AreaBlock({ area, drag }: { area: Area; drag: DragState }) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
+  const { listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: aid(area.id), data: { type: "area" } });
+  const active = useUI((s) => s.view.kind === "area" && s.view.id === area.id);
+  const collapsed = useUI((s) => s.collapsedAreas.includes(area.id));
+  // Keep the list open while a project is dragged over it, so it can be dropped in.
+  const open = !collapsed || drag.dragging === "project";
+  const toggle = () => useUI.getState().setAreaCollapsed(area.id, !collapsed);
+  const later = (fn: () => void) => () => void setTimeout(fn, 0);
   return (
     <SidebarGroup ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={cn("p-0 pt-4", isDragging && "opacity-40")}>
-      <div className="group/menu-item relative" {...pointerOnly(listeners)}>
-        <Grip ref={setActivatorNodeRef} {...attributes} {...listeners} label={`Reorder area ${area.name}`} className="-left-1" />
-        <SidebarGroupLabel asChild className="h-7 cursor-default font-semibold uppercase tracking-wide hover:text-sidebar-foreground">
-          <button onClick={() => goTo({ kind: "area", id: area.id })} className="w-full text-left">{area.name}</button>
-        </SidebarGroupLabel>
-      </div>
-      <ProjectList areaId={area.id} projects={area.projects} drag={drag} />
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div className="group/menu-item relative flex items-center" {...pointerOnly(listeners)}>
+            <Button variant="ghost" size="icon-xs" className="shrink-0 text-muted-foreground" aria-expanded={open} aria-label={`${open ? "Collapse" : "Expand"} area ${area.name}`} onClick={toggle}>
+              <ChevronRightIcon className={cn("transition-transform", open && "rotate-90")} />
+            </Button>
+            <button
+              onClick={() => goTo({ kind: "area", id: area.id })}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "h-7 min-w-0 flex-1 cursor-pointer truncate rounded-md px-1.5 text-left text-xs font-semibold uppercase tracking-wide outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+                active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70",
+              )}
+            >
+              {area.name}
+            </button>
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-48" aria-label={`Actions for ${area.name}`}>
+          <ContextMenuItem onSelect={later(() => { useUI.getState().setAreaCollapsed(area.id, false); newProject(area.id); })}><PlusIcon />New project</ContextMenuItem>
+          <ContextMenuItem onSelect={later(() => promptName({ title: "Rename area", label: "Area name", initial: area.name, confirm: "Rename" }, (name) => void attempt(() => api.renameArea(area.id, name))))}><PencilIcon />Rename area</ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+      {open && <ProjectList areaId={area.id} projects={area.projects} drag={drag} />}
     </SidebarGroup>
   );
 }

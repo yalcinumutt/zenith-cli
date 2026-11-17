@@ -4,8 +4,6 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { pointerOnly } from "@/lib/utils";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, type Task } from "../api/client";
@@ -158,7 +156,7 @@ function SectionBlock({ section, children, lifted }: { section: Section; childre
   const sortable = typeof section.heading === "number";
   // Sortable only for real headings; the loose "no heading" block stays first. The hook is
   // always called, and disabled for the loose block.
-  const { attributes, listeners, setNodeRef: sortRef, setActivatorNodeRef, transform, transition } = useSortable({
+  const { listeners, setNodeRef: sortRef, transform, transition } = useSortable({
     id: sortable ? headingId(section.heading as number) : `loose:${section.key}`,
     data: { type: "heading" },
     disabled: !sortable,
@@ -172,19 +170,6 @@ function SectionBlock({ section, children, lifted }: { section: Section; childre
     >
       {section.title && (
         <div {...(sortable ? pointerOnly(listeners) : {})} className="relative mb-1 flex items-center justify-between border-b border-border pb-1.5 pt-2">
-          {sortable && (
-            <Button
-              ref={setActivatorNodeRef}
-              {...attributes}
-              {...listeners}
-              variant="ghost"
-              size="icon-xs"
-              aria-label={`Reorder heading ${typeof section.title === "string" ? section.title : ""}`}
-              className="absolute -left-7 top-2 hidden cursor-grab text-muted-foreground focus-visible:flex group-hover/heading:flex"
-            >
-              <GripVertical />
-            </Button>
-          )}
           <h2 className="text-sm font-semibold">{section.title}</h2>
           {section.actions}
         </div>
