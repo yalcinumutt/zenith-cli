@@ -9,9 +9,12 @@ package appapi
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/yalcinumutt/zenith-cli/internal/calendar"
 	"github.com/yalcinumutt/zenith-cli/internal/core"
 	"github.com/yalcinumutt/zenith-cli/internal/models"
 )
@@ -23,6 +26,12 @@ type Service struct {
 	prefs   *prefsStore
 	version string
 
+	plan    *planSettingsStore
+	feed    *calendar.Feed
+	secrets secrets
+	keyMu   sync.Mutex
+	keys    map[string]string // API keys read from the keychain, by provider kind
+
 	// releasesURL overrides the GitHub releases endpoint (tests only).
 	releasesURL string
 }
@@ -32,7 +41,20 @@ func New(c *core.Core, clock core.Clock, prefsPath, version string) *Service {
 	if clock == nil {
 		clock = core.SystemClock{}
 	}
-	return &Service{core: c, clock: clock, prefs: &prefsStore{path: prefsPath}, version: version}
+	planPath := ""
+	if prefsPath != "" {
+		planPath = filepath.Join(filepath.Dir(prefsPath), "planning.json")
+	}
+	s := &Service{core: c, clock: clock, prefs: &prefsStore{path: prefsPath}, version: version,
+		plan: &planSettingsStore{path: planPath}, feed: calendar.NewFeed(nil), secrets: keychain{}}
+	// A bad saved link only disables the calendar; the planner still works.
+	s.feed.SetLocation(clock.Now().Location())
+	_ = s.feed.SetURL(s.plan.load().CalendarURL)
+	if c != nil { // some tests exercise only preferences
+		c.Planning.SetBusySource(calendarBusy{feed: s.feed, loc: clock.Now().Location()})
+		c.Planning.SetAdvisor(aiAdvisor{s: s})
+	}
+	return s
 }
 
 func (s *Service) today() string { return s.clock.Now().Format(models.DateLayout) }

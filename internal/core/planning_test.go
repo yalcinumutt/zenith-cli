@@ -1,11 +1,14 @@
 package core_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
 	"github.com/yalcinumutt/zenith-cli/internal/core"
 )
+
+var bg = context.Background()
 
 func TestPlanListsTodayTasksAndBlocks(t *testing.T) {
 	c, _ := newCore(t)
@@ -15,7 +18,7 @@ func TestPlanListsTodayTasksAndBlocks(t *testing.T) {
 	if _, err := c.Planning.AddBlock(a.ID, "2026-03-01", 9*60, 90); err != nil {
 		t.Fatal(err)
 	}
-	p, err := c.Planning.Plan("2026-03-01")
+	p, err := c.Planning.Plan(bg, "2026-03-01")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +28,7 @@ func TestPlanListsTodayTasksAndBlocks(t *testing.T) {
 	if len(p.Blocks) != 1 || p.Blocks[0].StartMin != 540 || p.Blocks[0].DurationMin != 90 {
 		t.Fatalf("blocks = %+v", p.Blocks)
 	}
-	tm, _ := c.Planning.Plan("2026-03-02")
+	tm, _ := c.Planning.Plan(bg, "2026-03-02")
 	if got := titles(tm.Tasks); len(got) != 1 || got[0] != "tomorrow" || len(tm.Blocks) != 0 {
 		t.Fatalf("tomorrow = %v %v", got, tm.Blocks)
 	}
@@ -78,10 +81,10 @@ func TestBlockLifecycleAndTaskRules(t *testing.T) {
 	if err := c.Planning.Move(blk.ID, "2026-03-02", 600); err != nil {
 		t.Fatal(err)
 	}
-	if p, _ := c.Planning.Plan("2026-03-01"); len(p.Blocks) != 0 {
+	if p, _ := c.Planning.Plan(bg, "2026-03-01"); len(p.Blocks) != 0 {
 		t.Fatalf("block should have left the day: %+v", p.Blocks)
 	}
-	if p, _ := c.Planning.Plan("2026-03-02"); len(p.Blocks) != 1 || p.Blocks[0].DurationMin != 45 {
+	if p, _ := c.Planning.Plan(bg, "2026-03-02"); len(p.Blocks) != 1 || p.Blocks[0].DurationMin != 45 {
 		t.Fatalf("moved block = %+v", p.Blocks)
 	}
 	if err := c.Planning.Remove(blk.ID); err != nil {
@@ -113,7 +116,7 @@ func TestBlocksOfDeletedTasksDisappear(t *testing.T) {
 	if err := c.Tasks.Delete(a.ID); err != nil {
 		t.Fatal(err)
 	}
-	if p, _ := c.Planning.Plan("2026-03-01"); len(p.Blocks) != 0 {
+	if p, _ := c.Planning.Plan(bg, "2026-03-01"); len(p.Blocks) != 0 {
 		t.Fatalf("blocks = %+v", p.Blocks)
 	}
 }

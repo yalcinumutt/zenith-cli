@@ -193,9 +193,61 @@ type BlockDTO struct {
 	Duration  int    `json:"duration"` // minutes
 }
 
+// BusyDTO is a calendar event shown as locked time on the timeline.
+type BusyDTO struct {
+	Title string `json:"title"`
+	Start int    `json:"start"`
+	End   int    `json:"end"`
+}
+
 // PlanDTO is the Daily Planning view of one day.
 type PlanDTO struct {
-	Date   string     `json:"date"`
-	Tasks  []TaskDTO  `json:"tasks"`
-	Blocks []BlockDTO `json:"blocks"`
+	Date               string     `json:"date"`
+	Tasks              []TaskDTO  `json:"tasks"`
+	Blocks             []BlockDTO `json:"blocks"`
+	Busy               []BusyDTO  `json:"busy"`
+	CalendarConfigured bool       `json:"calendarConfigured"`
+	CalendarError      string     `json:"calendarError"` // why Busy may be missing or stale
+	WorkStart          int        `json:"workStart"`
+	WorkEnd            int        `json:"workEnd"`
+	AIReady            bool       `json:"aiReady"`
+	AICloud            bool       `json:"aiCloud"` // asking the AI sends task titles off this machine
+}
+
+// PlanSettingsDTO is what the planner's settings dialog edits. The API key is
+// write-only: it is stored in the system keychain and never sent back.
+type PlanSettingsDTO struct {
+	WorkStart    int    `json:"workStart"` // minutes after midnight
+	WorkEnd      int    `json:"workEnd"`
+	CalendarURL  string `json:"calendarUrl"`
+	AIKind       string `json:"aiKind"` // "" (off) | local | openai | anthropic
+	AIURL        string `json:"aiUrl"`  // "" means the kind's default
+	AIModel      string `json:"aiModel"`
+	AIHasKey     bool   `json:"aiHasKey"`
+	DefaultURL   string `json:"defaultUrl"`   // what an empty AIURL means for AIKind
+	DefaultModel string `json:"defaultModel"` // what an empty AIModel means for AIKind
+}
+
+// CalendarTestDTO is the outcome of trying the calendar link.
+type CalendarTestDTO struct {
+	OK      bool   `json:"ok"`
+	Message string `json:"message"`
+}
+
+// ProposalDTO is a block the planner suggests, for review before it is applied.
+type ProposalDTO struct {
+	TaskID    int64  `json:"taskId"`
+	TaskTitle string `json:"taskTitle"`
+	Start     int    `json:"start"`
+	Duration  int    `json:"duration"`
+	Reason    string `json:"reason"`
+}
+
+// SuggestionDTO is a proposed plan: nothing is saved until it is applied.
+type SuggestionDTO struct {
+	Source    string        `json:"source"` // heuristic | ai
+	Summary   string        `json:"summary"`
+	Proposals []ProposalDTO `json:"proposals"`
+	Unplaced  []string      `json:"unplaced"` // titles of tasks with no slot
+	Dropped   []string      `json:"dropped"`  // AI proposals rejected, with reasons
 }

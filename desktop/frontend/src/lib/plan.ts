@@ -41,3 +41,10 @@ export function firstFreeSlot(blocks: Block[], duration: number, from: number): 
 export function scheduledMinutes(blocks: Block[], taskId: number): number {
   return blocks.filter((b) => b.taskId === taskId).reduce((n, b) => n + b.duration, 0);
 }
+
+/** 570 -> "09:30" for <input type="time">; and back. */
+export const toTimeInput = (m: number): string => fmtClock(m);
+export function fromTimeInput(v: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(v);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}

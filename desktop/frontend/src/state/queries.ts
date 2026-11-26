@@ -19,6 +19,7 @@ export const keys = {
   reminders: ["reminders"] as const,
   habits: ["habits"] as const,
   plan: (date: string) => ["plan", date] as const,
+  planSettings: ["planSettings"] as const,
 };
 
 export const useInfo = () => useQuery({ queryKey: keys.info, queryFn: api.info, staleTime: 30_000, refetchInterval: 60_000 });
@@ -32,6 +33,7 @@ export const useAreaView = (id: number) => useQuery({ queryKey: keys.area(id), q
 export const useSubtasks = (id: number, enabled: boolean) =>
   useQuery({ queryKey: keys.subtasks(id), queryFn: () => api.subtasks(id), enabled });
 export const usePlan = (date: string) => useQuery({ queryKey: keys.plan(date), queryFn: () => api.plan(date), enabled: date !== "" });
+export const usePlanSettings = () => useQuery({ queryKey: keys.planSettings, queryFn: api.planSettings });
 export const useHabits = () => useQuery({ queryKey: keys.habits, queryFn: api.habits });
 export const usePendingReminders = () => useQuery({ queryKey: keys.reminders, queryFn: api.pendingReminders });
 

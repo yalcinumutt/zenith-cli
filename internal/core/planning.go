@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -24,19 +25,40 @@ type PlanningService struct {
 	clock Clock
 	bus   *bus
 	lists *ListService
+
+	busy    BusySource // optional: calendar busy times
+	advisor Advisor    // optional: AI suggestions
 }
+
+// Interval is a stretch of one day, in minutes after midnight (end exclusive).
+type Interval struct {
+	Title    string
+	StartMin int
+	EndMin   int
+}
+
+// BusySource supplies busy times from outside Zenith (an ICS calendar feed).
+// An error means the data may be stale; the intervals returned are still used.
+type BusySource interface {
+	Busy(ctx context.Context, date string) ([]Interval, error)
+}
+
+// SetBusySource wires calendar busy times into planning; nil removes them.
+func (s *PlanningService) SetBusySource(b BusySource) { s.busy = b }
 
 // DayPlan is everything the planner shows for one day.
 type DayPlan struct {
-	Date   string
-	Tasks  []models.Task // the day's open tasks, in list order
-	Blocks []models.TimeBlock
+	Date    string
+	Tasks   []models.Task // the day's open tasks, in list order
+	Blocks  []models.TimeBlock
+	Busy    []Interval // calendar events; read-only
+	BusyErr error      // why Busy may be missing or stale
 }
 
 // Plan returns the tasks to plan for a day and the blocks already placed on it.
 // For today that is the Today list; for any other day it is the open tasks
 // scheduled exactly for that day.
-func (s *PlanningService) Plan(date string) (*DayPlan, error) {
+func (s *PlanningService) Plan(ctx context.Context, date string) (*DayPlan, error) {
 	if err := checkDate(date); err != nil {
 		return nil, err
 	}
@@ -62,7 +84,11 @@ func (s *PlanningService) Plan(date string) (*DayPlan, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &DayPlan{Date: date, Tasks: tasks, Blocks: blocks}, nil
+	plan := &DayPlan{Date: date, Tasks: tasks, Blocks: blocks}
+	if s.busy != nil {
+		plan.Busy, plan.BusyErr = s.busy.Busy(ctx, date)
+	}
+	return plan, nil
 }
 
 // AddBlock places a block for an open task. The task is not rescheduled: a

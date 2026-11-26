@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { api, type Block } from "../../api/client";
+import { api, type Block, type Busy, type Proposal } from "../../api/client";
 import { clamp, DAY_MIN, fmtClock, fmtDuration, HOUR_PX, PX_PER_MIN, SNAP, snap } from "../../lib/plan";
 import { keys } from "../../state/queries";
 
@@ -15,12 +15,18 @@ const FIRST_VISIBLE_HOUR = 7;
 interface Props {
   date: string;
   blocks: Block[];
+  /** Calendar events: locked, drawn behind the blocks. */
+  busy: Busy[];
+  /** Suggested blocks awaiting review, drawn as dashed ghosts. */
+  proposals: Proposal[];
+  workStart: number;
+  workEnd: number;
   /** Minute of "now" when the day shown is today, else null. */
   nowMin: number | null;
 }
 
 /** A day as a vertical ruler. Blocks are dragged to move and pulled from the bottom edge to resize. */
-export function DayTimeline({ date, blocks, nowMin }: Props) {
+export function DayTimeline({ date, blocks, busy, proposals, workStart, workEnd, nowMin }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const { setNodeRef } = useDroppable({ id: TIMELINE_DROP_ID });
 
@@ -34,6 +40,30 @@ export function DayTimeline({ date, blocks, nowMin }: Props) {
         {Array.from({ length: 24 }, (_, h) => (
           <div key={h} className="absolute left-0 right-0 border-t border-border/60" style={{ top: h * HOUR_PX }}>
             <span className="absolute -top-2 left-2 bg-card px-0.5 text-[11px] tabular-nums text-muted-foreground">{fmtClock(h * 60)}</span>
+          </div>
+        ))}
+        <div className="pointer-events-none absolute inset-x-0 top-0 bg-muted/40" style={{ height: workStart * PX_PER_MIN }} aria-hidden />
+        <div className="pointer-events-none absolute inset-x-0 bg-muted/40" style={{ top: workEnd * PX_PER_MIN, height: (DAY_MIN - workEnd) * PX_PER_MIN }} aria-hidden />
+        {busy.map((b, i) => (
+          <div
+            key={`busy${i}`}
+            title={`${b.title || "Busy"} · ${fmtClock(b.start)}–${fmtClock(b.end)}`}
+            aria-label={`Calendar: ${b.title || "Busy"}, ${fmtClock(b.start)} to ${fmtClock(b.end)}`}
+            className="pointer-events-none absolute z-0 overflow-hidden rounded-lg border border-border bg-[repeating-linear-gradient(135deg,transparent_0_6px,var(--border)_6px_7px)] px-2 pt-1 text-xs text-muted-foreground"
+            style={{ top: b.start * PX_PER_MIN + 1, height: (b.end - b.start) * PX_PER_MIN - 2, left: GUTTER, right: 8 }}
+          >
+            <span className="truncate font-medium">{b.title || "Busy"}</span>
+          </div>
+        ))}
+        {proposals.map((p) => (
+          <div
+            key={`ghost${p.taskId}-${p.start}`}
+            aria-label={`Suggested: ${p.taskTitle}, ${fmtClock(p.start)} to ${fmtClock(p.start + p.duration)}`}
+            className="pointer-events-none absolute z-10 overflow-hidden rounded-lg border-2 border-dashed border-primary/60 bg-primary/5 px-2 pt-1 text-xs"
+            style={{ top: p.start * PX_PER_MIN + 1, height: p.duration * PX_PER_MIN - 2, left: GUTTER, right: 8 }}
+          >
+            <p className="truncate font-medium text-primary">{p.taskTitle}</p>
+            {p.duration > 30 && <p className="truncate text-muted-foreground">{fmtClock(p.start)}–{fmtClock(p.start + p.duration)}{p.reason ? ` · ${p.reason}` : ""}</p>}
           </div>
         ))}
         {nowMin !== null && (
