@@ -13,6 +13,7 @@ import { parseView, useUI, type Theme } from "./state/ui";
 import { AreaView } from "./views/AreaView";
 import { ListView } from "./views/ListView";
 import { HabitsView } from "./views/HabitsView";
+import { PlanView } from "./views/PlanView";
 import { ProjectView } from "./views/ProjectView";
 
 /** Apply the theme: the stored override, or the system setting when it is "system". */
@@ -88,10 +89,11 @@ export default function App() {
     <div className="flex h-full bg-background text-foreground">
       <Sidebar />
       <main className="flex-1 overflow-auto" aria-label="Tasks" onClick={(e) => { if (e.target === e.currentTarget) useUI.getState().select(null); }}>
-        <div className="mx-auto max-w-2xl px-10 pb-40 pt-12">
+        <div className={`mx-auto px-10 pb-40 pt-12 ${view.kind === "plan" ? "max-w-6xl" : "max-w-2xl"}`}>
           {view.kind === "list" && <ListView key={view.list} list={view.list} />}
           {view.kind === "project" && <ProjectView key={`p${view.id}`} id={view.id} />}
           {view.kind === "habits" && <HabitsView />}
+          {view.kind === "plan" && <PlanView />}
           {view.kind === "area" && <AreaView key={`a${view.id}`} id={view.id} />}
         </div>
       </main>

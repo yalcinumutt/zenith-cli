@@ -120,7 +120,7 @@ func (s *Service) toDTO(ix *index, t models.Task) TaskDTO {
 	}
 	d := TaskDTO{
 		ID: t.ID, UUID: t.UUID, Title: t.Title, Notes: t.Description, Status: t.Status,
-		WhenKind: string(t.When.Kind), WhenDate: t.When.Date, Deadline: t.Deadline, Evening: t.Evening, Priority: int(t.Priority),
+		WhenKind: string(t.When.Kind), WhenDate: t.When.Date, Deadline: t.Deadline, Evening: t.Evening, Estimate: t.EstimateMinutes, Priority: int(t.Priority),
 		ProjectID: t.ProjectID, AreaID: t.AreaID, HeadingID: t.HeadingID, ParentID: t.ParentID,
 		Tags: tags, Repeat: s.repeat(ix, t), Running: t.IsRunning, SecondsTracked: t.TotalTime,
 		Overdue:   t.Status == models.StatusOpen && t.Deadline != "" && t.Deadline < ix.today,
@@ -364,6 +364,11 @@ func (s *Service) UpdateTask(id int64, p TaskPatch) (TaskDTO, error) {
 	}
 	if p.Evening != nil {
 		if err := s.core.Tasks.SetEvening(id, *p.Evening); err != nil {
+			return TaskDTO{}, err
+		}
+	}
+	if p.Estimate != nil {
+		if err := s.core.Tasks.SetEstimate(id, *p.Estimate); err != nil {
 			return TaskDTO{}, err
 		}
 	}

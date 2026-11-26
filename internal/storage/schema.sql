@@ -40,6 +40,21 @@ CREATE TABLE IF NOT EXISTS repeaters (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Time Blocks Table (a slice of a day set aside for a task; synced)
+CREATE TABLE IF NOT EXISTS time_blocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid TEXT,
+    task_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    start_min INTEGER NOT NULL,
+    duration_min INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TEXT,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_time_blocks_date ON time_blocks(date);
+
 -- Projects Table
 CREATE TABLE IF NOT EXISTS projects (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

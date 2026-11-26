@@ -175,13 +175,14 @@ func str(v any) string {
 // Stamped field sets, by entity. Foreign references are listed by their local
 // column; the op-log boundary translates them to uuids (ADR 0003).
 var (
-	taskCols     = []string{"project_id", "area_id", "heading_id", "parent_task_id", "title", "description", "status", "priority", "when_kind", "when_date", "deadline", "evening", "repeater_id", "occurrence_date", "sort_key"}
-	projectCols  = []string{"area_id", "name", "description", "status", "sort_key"}
-	areaCols     = []string{"name", "sort_key"}
-	headingCols  = []string{"project_id", "title", "sort_key"}
-	tagCols      = []string{"name", "color"}
-	habitCols    = []string{"name", "description", "frequency"}
-	repeaterCols = []string{"kind", "interval", "weekdays", "month_day", "title", "description", "project_id", "area_id", "heading_id", "priority", "evening", "deadline_offset"}
+	taskCols      = []string{"project_id", "area_id", "heading_id", "parent_task_id", "title", "description", "status", "priority", "when_kind", "when_date", "deadline", "evening", "repeater_id", "occurrence_date", "sort_key", "estimate_minutes"}
+	projectCols   = []string{"area_id", "name", "description", "status", "sort_key"}
+	areaCols      = []string{"name", "sort_key"}
+	headingCols   = []string{"project_id", "title", "sort_key"}
+	tagCols       = []string{"name", "color"}
+	timeBlockCols = []string{"task_id", "date", "start_min", "duration_min"}
+	habitCols     = []string{"name", "description", "frequency"}
+	repeaterCols  = []string{"kind", "interval", "weekdays", "month_day", "title", "description", "project_id", "area_id", "heading_id", "priority", "evening", "deadline_offset"}
 )
 
 func taskVals(t *models.Task) map[string]string {
@@ -189,7 +190,7 @@ func taskVals(t *models.Task) map[string]string {
 		"project_id": str(t.ProjectID), "area_id": str(t.AreaID), "heading_id": str(t.HeadingID), "parent_task_id": str(t.ParentID),
 		"title": t.Title, "description": t.Description, "status": t.Status, "priority": str(t.Priority),
 		"when_kind": string(whenKindOrDefault(t.When)), "when_date": t.When.Date, "deadline": t.Deadline, "evening": str(t.Evening),
-		"repeater_id": str(t.RepeaterID), "occurrence_date": t.OccurrenceDate, "sort_key": t.SortKey,
+		"repeater_id": str(t.RepeaterID), "occurrence_date": t.OccurrenceDate, "sort_key": t.SortKey, "estimate_minutes": str(nullZero(t.EstimateMinutes)),
 	}
 }
 
@@ -207,6 +208,10 @@ func headingVals(h *models.Heading) map[string]string {
 
 func tagVals(t *models.Tag) map[string]string {
 	return map[string]string{"name": t.Name, "color": t.Color}
+}
+
+func timeBlockVals(b *models.TimeBlock) map[string]string {
+	return map[string]string{"task_id": str(b.TaskID), "date": b.Date, "start_min": str(b.StartMin), "duration_min": str(b.DurationMin)}
 }
 
 func habitVals(h *models.Habit) map[string]string {

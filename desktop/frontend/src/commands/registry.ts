@@ -37,6 +37,7 @@ export const commands: Command[] = [
     run: () => goList(i),
   })),
   { id: "go-habits", title: "Go to Habits", group: "Navigate", shortcut: "mod+7", keywords: ["habit", "streak", "routine"], run: () => goTo({ kind: "habits" }) },
+  { id: "go-plan", title: "Daily planning", group: "Navigate", shortcut: "mod+8", keywords: ["plan", "time block", "timeblock", "schedule", "calendar", "day"], run: () => goTo({ kind: "plan" }) },
   { id: "select-next", title: "Select next task", group: "Navigate", shortcut: "arrowdown", when: () => ui().rows.length > 0, run: () => moveSelection(1) },
   { id: "select-prev", title: "Select previous task", group: "Navigate", shortcut: "arrowup", when: () => ui().rows.length > 0, run: () => moveSelection(-1) },
   { id: "palette", title: "Open command palette", group: "Navigate", shortcut: "mod+k", run: () => ui().setPalette(true) },
@@ -73,7 +74,7 @@ export const commands: Command[] = [
     when: () => ui().view.kind === "project" || ui().view.kind === "area",
     run: () => {
       const v = currentView();
-      if (v.kind === "list" || v.kind === "habits") return;
+      if (v.kind === "list" || v.kind === "habits" || v.kind === "plan") return;
       promptName({ title: "Rename", label: "Name", confirm: "Rename" }, (name) => void attempt(() => (v.kind === "project" ? api.renameProject(v.id, name) : api.renameArea(v.id, name))));
     },
   },
@@ -83,7 +84,7 @@ export const commands: Command[] = [
     when: () => ui().view.kind === "project" || ui().view.kind === "area",
     run: () => {
       const v = currentView();
-      if (v.kind === "list" || v.kind === "habits") return;
+      if (v.kind === "list" || v.kind === "habits" || v.kind === "plan") return;
       ui().openDialog({
         kind: "confirm", title: `Delete ${v.kind}`, confirm: "Delete", danger: true,
         message: v.kind === "project" ? "This deletes the project with its headings and every task in it." : "The area is removed; its projects become standalone and its tasks unfiled.",

@@ -4,7 +4,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarIcon, CheckCheckIcon, ChevronRightIcon, FlameIcon, FolderOpenIcon, InboxIcon, InfoIcon, LayersIcon, MoonIcon, PencilIcon, PlusIcon, StarIcon, SunMoonIcon, type LucideIcon } from "lucide-react";
+import { CalendarClockIcon, CalendarIcon, CheckCheckIcon, ChevronRightIcon, FlameIcon, FolderOpenIcon, InboxIcon, InfoIcon, LayersIcon, MoonIcon, PencilIcon, PlusIcon, StarIcon, SunMoonIcon, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,7 @@ const ICON_TONE: Record<ListId, string> = { inbox: "text-primary", today: "text-
 function same(a: View, b: View): boolean {
   if (a.kind !== b.kind) return false;
   if (a.kind === "list" && b.kind === "list") return a.list === b.list;
-  if (a.kind === "habits" || b.kind === "habits") return a.kind === b.kind;
+  if (a.kind === "habits" || b.kind === "habits" || a.kind === "plan" || b.kind === "plan") return a.kind === b.kind;
   return a.kind !== "list" && b.kind !== "list" && a.id === b.id;
 }
 
@@ -219,6 +219,9 @@ export function Sidebar() {
           </SidebarMenu>
 
           <SidebarMenu className="pt-4">
+            <SidebarMenuItem>
+              <NavRow target={{ kind: "plan" }} label="Daily planning" icon={CalendarClockIcon} />
+            </SidebarMenuItem>
             <SidebarMenuItem>
               <NavRow target={{ kind: "habits" }} label="Habits" icon={FlameIcon} tone="text-amber-600 dark:text-amber-400" />
             </SidebarMenuItem>

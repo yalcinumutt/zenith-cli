@@ -117,7 +117,14 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 
-	// 15. Sync groundwork: tombstone columns and initial field stamps (ADR 0010).
+	// 15. Planned effort per task, for time blocking.
+	if columnExists(db, "tasks", "id") {
+		if err := addColumn(db, "tasks", "estimate_minutes", "INTEGER"); err != nil {
+			return err
+		}
+	}
+
+	// 16. Sync groundwork: tombstone columns and initial field stamps (ADR 0010).
 	return migrateSyncGroundwork(db)
 }
 
@@ -551,7 +558,7 @@ func nullInt(v sql.NullInt64) any {
 }
 
 // tombstoneTables are the synced tables with a stamped deleted_at (soft delete).
-var tombstoneTables = []string{"areas", "projects", "headings", "tasks", "tags", "repeaters", "habits", "habit_logs", "task_tags"}
+var tombstoneTables = []string{"areas", "projects", "headings", "tasks", "tags", "repeaters", "habits", "habit_logs", "task_tags", "time_blocks"}
 
 // stampedEntities lists, for each table, the entity name and the fields that
 // get an initial stamp. Grow-only rows (logs, history) carry a single "_created".
@@ -567,6 +574,7 @@ var stampedEntities = []struct {
 	{"repeaters", "repeater", repeaterCols},
 	{"habits", "habit", habitCols},
 	{"habit_logs", "habit_log", []string{"_created"}},
+	{"time_blocks", "time_block", timeBlockCols},
 	{"task_history", "task_history", []string{"_created"}},
 }
 

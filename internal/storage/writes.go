@@ -114,3 +114,15 @@ func (s *SQLiteStore) UpdateRepeater(r *models.Repeater) error {
 func (s *SQLiteStore) DeleteRepeater(id int64) error {
 	return s.write(func(st *SQLiteStore) error { return st.deleteRepeater(id) })
 }
+
+func (s *SQLiteStore) AddTimeBlock(b *models.TimeBlock) error {
+	return s.write(func(st *SQLiteStore) error { return st.addTimeBlock(b) })
+}
+
+func (s *SQLiteStore) UpdateTimeBlock(b *models.TimeBlock) error {
+	return s.write(func(st *SQLiteStore) error { return st.updateTimeBlock(b) })
+}
+
+func (s *SQLiteStore) DeleteTimeBlock(id int64) error {
+	return s.write(func(st *SQLiteStore) error { return st.softDelete("time_blocks", "time_block", id) })
+}

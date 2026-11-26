@@ -5,6 +5,7 @@ import { Browser, Events } from "@wailsio/runtime";
 import * as Svc from "../../bindings/github.com/yalcinumutt/zenith-cli/internal/appapi/service.js";
 import type {
   AreaDTO,
+  BlockDTO,
   ChangeEvent,
   Counts,
   HabitDTO,
@@ -12,6 +13,7 @@ import type {
   Info,
   NewTask,
   Place,
+  PlanDTO,
   Prefs,
   ProjectDTO,
   ReminderDTO,
@@ -29,6 +31,10 @@ export type Habit = Omit<HabitDTO, "days"> & { days: string[] };
 export type Task = Omit<TaskDTO, "tags"> & { tags: TagDTO[] };
 export type Project = ProjectDTO;
 export type Area = Omit<AreaDTO, "projects"> & { projects: ProjectDTO[] };
+/** A Time Block on the day timeline; start and duration are minutes. */
+export type Block = BlockDTO;
+/** One day in Daily Planning: the tasks to place and the blocks already placed. */
+export interface Plan { date: string; tasks: Task[]; blocks: Block[] }
 export interface Today { day: Task[]; evening: Task[] }
 export interface Sidebar { areas: Area[]; standalone: Project[] }
 export interface ProjectView { project: Project; headings: HeadingDTO[]; tasks: Task[] }
@@ -101,6 +107,15 @@ export const api = {
   addReminder: (taskId: number | null, title: string, atIso: string): Promise<ReminderDTO> => Svc.AddReminder(taskId, title, atIso),
   pendingReminders: async (): Promise<ReminderDTO[]> => (await Svc.PendingReminders()) ?? [],
 
+  plan: async (date: string): Promise<Plan> => {
+    const p: PlanDTO = await Svc.Plan(date);
+    return { date: p.date, tasks: tasks(p.tasks), blocks: p.blocks ?? [] };
+  },
+  addBlock: (taskId: number, date: string, start: number, duration: number): Promise<Block> => Svc.AddBlock(taskId, date, start, duration),
+  moveBlock: (id: number, date: string, start: number): Promise<void> => Svc.MoveBlock(id, date, start),
+  resizeBlock: (id: number, duration: number): Promise<void> => Svc.ResizeBlock(id, duration),
+  removeBlock: (id: number): Promise<void> => Svc.RemoveBlock(id),
+
   habits: async (): Promise<Habit[]> => ((await Svc.Habits()) ?? []).map((h) => ({ ...h, days: h.days ?? [] })),
   addHabit: async (name: string): Promise<Habit> => ({ ...(await Svc.AddHabit(name)), days: [] }),
   renameHabit: (id: number, name: string): Promise<void> => Svc.RenameHabit(id, name),
@@ -112,7 +127,7 @@ export const api = {
 };
 
 const emptyPatch: TaskPatch = {
-  title: null, notes: null, whenKind: null, whenDate: null, deadline: null, evening: null, tags: null,
+  title: null, notes: null, whenKind: null, whenDate: null, deadline: null, evening: null, estimate: null, tags: null,
   projectId: null, clearProject: false, areaId: null, headingId: null, clearHeading: false,
 };
 

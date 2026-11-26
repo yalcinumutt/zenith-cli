@@ -83,6 +83,14 @@ type Store interface {
 	UpdateHeading(heading *models.Heading) error
 	DeleteHeading(id int64) error
 
+	// Time Blocks
+	AddTimeBlock(b *models.TimeBlock) error
+	GetTimeBlock(id int64) (*models.TimeBlock, error) // ErrNotFound when absent
+	// GetTimeBlocks returns the live blocks of live tasks on one day, by start.
+	GetTimeBlocks(date string) ([]models.TimeBlock, error)
+	UpdateTimeBlock(b *models.TimeBlock) error
+	DeleteTimeBlock(id int64) error // tombstones the block
+
 	// Search
 	SearchTasks(query string) ([]models.Task, error)
 	SearchHabits(query string) ([]models.Habit, error)

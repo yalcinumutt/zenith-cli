@@ -52,6 +52,7 @@ type TaskDTO struct {
 	Deadline       string     `json:"deadline"`
 	Priority       int        `json:"priority"` // 0 low, 1 medium, 2 high, 3 critical
 	Evening        bool       `json:"evening"`
+	Estimate       int        `json:"estimate"` // planned minutes; 0 = none
 	ProjectID      *int64     `json:"projectId"`
 	ProjectName    string     `json:"projectName"`
 	AreaID         *int64     `json:"areaId"`
@@ -144,6 +145,7 @@ type TaskPatch struct {
 	WhenDate     *string   `json:"whenDate"`
 	Deadline     *string   `json:"deadline"` // "" clears
 	Evening      *bool     `json:"evening"`
+	Estimate     *int      `json:"estimate"` // minutes; 0 clears
 	Tags         *[]string `json:"tags"`
 	ProjectID    *int64    `json:"projectId"`
 	ClearProject bool      `json:"clearProject"` // also clears area and heading
@@ -178,3 +180,22 @@ type ChangeEvent struct {
 }
 
 var _ = models.StatusOpen
+
+// BlockDTO is one Time Block on the day timeline.
+type BlockDTO struct {
+	ID        int64  `json:"id"`
+	UUID      string `json:"uuid"`
+	TaskID    int64  `json:"taskId"`
+	TaskTitle string `json:"taskTitle"`
+	Done      bool   `json:"done"`     // the task has since been completed
+	Date      string `json:"date"`     // YYYY-MM-DD
+	Start     int    `json:"start"`    // minutes after midnight
+	Duration  int    `json:"duration"` // minutes
+}
+
+// PlanDTO is the Daily Planning view of one day.
+type PlanDTO struct {
+	Date   string     `json:"date"`
+	Tasks  []TaskDTO  `json:"tasks"`
+	Blocks []BlockDTO `json:"blocks"`
+}

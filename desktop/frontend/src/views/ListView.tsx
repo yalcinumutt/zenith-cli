@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { ArrowDownWideNarrowIcon } from "lucide-react";
+import { ArrowDownWideNarrowIcon, CalendarClockIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Task } from "../api/client";
 import { NewTask } from "../components/NewTask";
 import { TaskSections, type Section } from "../components/TaskSections";
 import { upcomingTitle } from "../lib/dates";
 import { useInfo, useList, useToday } from "../state/queries";
+import { goTo } from "../commands/actions";
 import { LIST_TITLES, type ListId } from "../state/ui";
 
 const EMPTY: Record<ListId, string> = {
@@ -31,7 +32,12 @@ export function ListView({ list }: { list: ListId }) {
         {LIST_TITLES[list]}
         {list === "today" && today && <span className="text-sm font-normal text-muted-foreground">{new Date(`${today}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</span>}
         {list === "today" && (
-          <Button variant="ghost" size="sm" className="ml-auto" aria-pressed={sort === "priority"} onClick={toggleSort}>
+          <Button variant="outline" size="sm" className="ml-auto" onClick={() => goTo({ kind: "plan" })}>
+            <CalendarClockIcon data-icon="inline-start" />Daily planning
+          </Button>
+        )}
+        {list === "today" && (
+          <Button variant="ghost" size="sm" aria-pressed={sort === "priority"} onClick={toggleSort}>
             <ArrowDownWideNarrowIcon data-icon="inline-start" />{sort === "priority" ? "Sorted by priority" : "Sort by priority"}
           </Button>
         )}

@@ -41,6 +41,7 @@ type Core struct {
 	Tags      *TagService
 	Lists     *ListService
 	Repeaters *RepeaterService
+	Planning  *PlanningService
 
 	store storage.Store
 	bus   *bus
@@ -61,6 +62,7 @@ func New(store storage.Store, clock Clock, notifier Notifier) *Core {
 	}
 	b := &bus{}
 	tasks := &TaskService{store: store, clock: clock, notifier: notifier, bus: b}
+	lists := &ListService{store: store, clock: clock}
 	return &Core{
 		Tasks:     tasks,
 		Areas:     &AreaService{store: store, clock: clock, bus: b, tasks: tasks},
@@ -69,8 +71,9 @@ func New(store storage.Store, clock Clock, notifier Notifier) *Core {
 		Reminders: &ReminderService{store: store, clock: clock, notifier: notifier, bus: b},
 		Habits:    &HabitService{store: store, bus: b, clock: clock},
 		Tags:      &TagService{store: store, bus: b},
-		Lists:     &ListService{store: store, clock: clock},
+		Lists:     lists,
 		Repeaters: &RepeaterService{store: store, tasks: tasks},
+		Planning:  &PlanningService{store: store, clock: clock, bus: b, lists: lists},
 		store:     store,
 		bus:       b,
 	}

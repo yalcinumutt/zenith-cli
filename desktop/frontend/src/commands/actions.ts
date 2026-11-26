@@ -143,7 +143,7 @@ export function deleteSelected(): void {
 export function newTaskDefaults(view: View, today: string): Partial<NewTask> {
   if (view.kind === "project") return { projectId: view.id };
   if (view.kind === "area") return { areaId: view.id };
-  if (view.kind === "habits") return {};
+  if (view.kind === "habits" || view.kind === "plan") return {};
   switch (view.list) {
     case "today": return { whenKind: "scheduled", whenDate: today };
     case "upcoming": return { whenKind: "scheduled", whenDate: addDays(today, 1) };

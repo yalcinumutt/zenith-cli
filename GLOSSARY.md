@@ -38,6 +38,14 @@ _Avoid_: Checklist item, sub-item
 A Task's intended working time: Anytime (unset), Today, a specific future date, or Someday. Distinct from Deadline. The six lists (Inbox, Today, Upcoming, Anytime, Someday, Logbook) are computed from When, Deadline and Status — none of them is ever stored on the row.
 _Avoid_: Planned date, scheduled date
 
+**Time Block**:
+A slice of one calendar day (a start minute and a length) the user sets aside to work on a Task. A Task can have several, they never overlap within a day, and none crosses midnight. Distinct from When (which day the Task is meant for, date only) and from a Timer (time actually spent).
+_Avoid_: Slot, appointment, calendar event
+
+**Estimate**:
+A Task's planned effort in minutes, used to size its Time Blocks. Zero means none.
+_Avoid_: Duration (that is a Time Block's length)
+
 **Deadline**:
 The date a Task is actually due, independent of When.
 _Avoid_: Due date
